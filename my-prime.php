@@ -217,6 +217,12 @@ function _updateVideos($service, $pdo, &$htmlBody) {
     $stmt->execute();
 	$result = $stmt->fetchAll();
 	
+	// SELECT * FROM (SELECT * FROM videos ORDER BY date_published DESC) GROUP BY playlist_id
+	$sql = "SELECT id FROM videos";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+	$result2 = $stmt->fetchAll();
+	
     $rows = array();
 	
 	$nbChannels = 0;
@@ -249,6 +255,12 @@ function _updateVideos($service, $pdo, &$htmlBody) {
 	mistermv 
 	*/
 	
+	$arrStoredVideos = [];
+	
+    foreach ($result2 as $row) {
+        $arrStoredVideos[] = $row['id'];
+	}
+	
     foreach ($result as $row) {
         $queryParams = [
             'playlistId' => $row['playlist_id'],
@@ -258,7 +270,7 @@ function _updateVideos($service, $pdo, &$htmlBody) {
         $reslistPlaylistItems = $service->playlistItems->listPlaylistItems('snippet', $queryParams);
 		
         foreach ($reslistPlaylistItems['items'] as $video) {
-            if (preg_match($strFilter, $video->snippet->title) !== 1) {
+            if (preg_match($strFilter, $video->snippet->title) !== 1 && !in_array($video->snippet->resourceId->videoId, $arrStoredVideos)) {
                 $arrVideos[$video->snippet->resourceId->videoId] = [
                     'channelTitle' => $video->snippet->channelTitle,
                     'title' => addslashes($video->snippet->title),
@@ -282,25 +294,28 @@ function _updateVideos($service, $pdo, &$htmlBody) {
 		break;
 	}
 	
+	if (count($arrVideos) !== 0) {
+		$htmlBody .= print_r($arrVideos, true);
 	
-	$htmlBody .= print_r($arrVideos, true);
+		$sql = "INSERT INTO videos (id, playlist_id, title, date_published, date_checked) VALUES";
+		$arrSqlVideos = [];
+		$now = date('Y-m-d');
 		
-	$sql = "INSERT INTO videos (id, playlist_id, title, date_published, date_checked) VALUES";
-    $arrSqlVideos = [];
-	$now = date('Y-m-d');
-	
-	foreach ($arrVideos as $arrSqlVideosId => $strSqlVideos) {
-		$title = str_replace('"', '""', $strSqlVideos['title']);
-		$sql .= "(\"$arrSqlVideosId\", \"{$strSqlVideos['playlistId']}\", \"{$title}\", \"{$strSqlVideos['publishedAt']}\", \"$now\"),";
+		foreach ($arrVideos as $arrSqlVideosId => $strSqlVideos) {
+			$title = str_replace('"', '""', $strSqlVideos['title']);
+			$sql .= "(\"$arrSqlVideosId\", \"{$strSqlVideos['playlistId']}\", \"{$title}\", \"{$strSqlVideos['publishedAt']}\", \"$now\"),";
+		}
+		
+		$sql = substr($sql, 0, -1).';';
+		echo $sql;
+		// die;
+		$stmt = $pdo->prepare($sql);
+		$stmt->execute();
+		
+		$htmlBody .= print_r($arrSqlVideos, true);
+	} else {
+		$htmlBody .= 'Videos up to date.';
 	}
-	
-	$sql = substr($sql, 0, -1).';';
-	echo $sql;
-	// die;
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-	
-	$htmlBody .= print_r($arrSqlVideos, true);
 	
 }
 ?>
