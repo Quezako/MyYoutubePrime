@@ -81,10 +81,9 @@ if ($client->getAccessToken()) {
 				break;
 			case '_listVideos':
 			default:
-				_listVideos($service, $pdo, $htmlBody);
+				_listVideos($service, $pdo, $table);
 				break;
 		}
-	
 	} catch (Google_Service_Exception $e) {
 		$htmlBody .= sprintf('<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
 		($e->getMessage()));
@@ -95,11 +94,9 @@ if ($client->getAccessToken()) {
 	} catch (Google_Exception $e) {
 		$htmlBody .= sprintf('<p>An Google_Exception error occurred: <code>%s</code></p>',
 		($e->getMessage()));
-		// _showAuth($client, $htmlBody);
 	} catch (Exception $e) {
 		$htmlBody .= sprintf('<p>An Exception error occurred: <code>%s</code></p>',
 		($e->getMessage()));
-		// _showAuth($client, $htmlBody);
 	}
   
 	$_SESSION[$tokenSessionKey] = $client->getAccessToken();
@@ -167,11 +164,11 @@ function _updateSubscriptions($service, $pdo, &$htmlBody) {
 		// break;
 	}
     
-	$sql = "DELETE FROM channels";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
+	// $sql = "DELETE FROM channels";
+    // $stmt = $pdo->prepare($sql);
+    // $stmt->execute();
 	
-	$sql = "INSERT INTO channels (id, name, playlist_id) VALUES";
+	$sql = "INSERT OR IGNORE INTO channels (id, name, playlist_id) VALUES";
 	
 	foreach ($arrMySubscriptions as $mySubscriptionId => $mySubscription) {
 		$sql .= "(\"$mySubscriptionId\", \"{$mySubscription['title']}\", \"{$mySubscription['uploads']}\"),";
@@ -186,7 +183,7 @@ function _updateSubscriptions($service, $pdo, &$htmlBody) {
 }
 
 function _listSubscriptions($service, $pdo, &$table) {
-	$sql = "SELECT * FROM channels";
+	$sql = "SELECT *, IFNULL(status, '7777') AS status2 FROM channels WHERE status2 > 0 ORDER BY status2 ASC";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
 	$resChannels = $stmt->fetchAll();
@@ -239,7 +236,7 @@ END;
 function _updateVideos($service, $pdo, &$htmlBody) {
 	$now = date_create();
 	
-	$sql = "SELECT playlist_id FROM channels";
+	$sql = "SELECT playlist_id FROM channels WHERE status=1;";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
 	$resChannels = $stmt->fetchAll();
@@ -249,7 +246,6 @@ function _updateVideos($service, $pdo, &$htmlBody) {
     $stmt->execute();
 	$resVideos = $stmt->fetchAll();
 	
-	$nbChannels = 0;
     $arrVideos = [];
 	/*$arrFilter = [
 		"clip officiel",
@@ -301,26 +297,15 @@ function _updateVideos($service, $pdo, &$htmlBody) {
         $rspPlaylistItems = $service->playlistItems->listPlaylistItems('snippet', $queryParams);
 		
         foreach ($rspPlaylistItems['items'] as $video) {
-            // if (preg_match($strFilter, $video->snippet->title) !== 1) {
-                $arrVideos[$video->snippet->resourceId->videoId] = [
-                    'channelTitle' => $video->snippet->channelTitle,
-                    'title' => addslashes($video->snippet->title),
-                    'videoId' => $video->snippet->resourceId->videoId,
-                    'playlistId' => $row['playlist_id'],
-                    'publishedAt' => $video->snippet->publishedAt,
-                    // 'publishedMonth' => substr($video->snippet->publishedAt, 0, 7),
-                    // 'isRated' => 0,
-                    // 'isPlaylist' => 0,
-                    // 'duration' => '',
-                ];
-            // }
+			$arrVideos[$video->snippet->resourceId->videoId] = [
+				'channelTitle' => $video->snippet->channelTitle,
+				// 'title' => addslashes($video->snippet->title),
+				'title' => $video->snippet->title,
+				'videoId' => $video->snippet->resourceId->videoId,
+				'playlistId' => $row['playlist_id'],
+				'publishedAt' => $video->snippet->publishedAt,
+			];
         }
-		
-		$nbChannels++;
-		
-		if ($nbChannels == 50) {
-			break;
-		}
 	}
 	
 	if (count($arrVideos) !== 0) {
@@ -487,7 +472,8 @@ function _listVideos($service, $pdo, &$table) {
 		LEFT JOIN playlists ON videos.my_playlist_id=playlists.id
 		LEFT JOIN channels ON videos.playlist_id=channels.playlist_id
 		WHERE videos.my_playlist_id=0
-		-- LIMIT 100
+		ORDER BY SUBSTR(videos.date_published, 0, 7) DESC, channels.status ASC
+		LIMIT 200
 END;
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
@@ -554,31 +540,53 @@ function _updateChannels($service, $pdo, &$htmlBody) {
 	if (!isset($_POST['data'])) {
 		echo 'No POST data.';
 	} else {
-	
-		$arrChecked = [];
-		$isIgnore = $_POST['data'][0] == 'btnIgnore' ? -2 : 1;
+		// $arrChecked = [];
+		$strStatus = $_POST['data'][0] == 'btnIgnore' ? -2 : 1;
+		
+		// if ($_POST['data'][0] == 'btnIgnore') {
+			// $strStatus = -2;
+		// } elseif ($_POST['data'][0] == 'btnUnignore') {
+			// $strStatus = 1;
+		// } else
 		
 		foreach($_POST['data'][2] as $key => $isChecked) {
-			if ($isChecked == 1) {
-				$arrChecked[] = $_POST['data'][1][$key];
+			if ($_POST['data'][0] == 'btnSort') {
+				$strSort = $key + 1;
+				
+				$sql = "UPDATE channels SET sort=\"{$strSort}\" WHERE id = \"{$_POST['data'][1][$key]}\";";
+				// var_dump($sql);
+				// die;
+				$stmt = $pdo->prepare($sql);
+				$stmt->execute();
+			} else {
+				if ($isChecked == 1) {
+					$sql = "UPDATE channels SET status=\"$strStatus\" WHERE id = \"{$_POST['data'][1][$key]}\";";
+					// var_dump($sql);
+					// die;
+					$stmt = $pdo->prepare($sql);
+					$stmt->execute();
+				}
 			}
 		}
 		
-		$strChecked = implode('","', $arrChecked);
+		// $strChecked = implode('","', $arrChecked);
 		
 		// var_dump($strChecked);
 		// die;
 		
-		if ($strChecked !== '') {
-			$sql = "UPDATE channels SET status=\"$isIgnore\" WHERE id IN(\"$strChecked\");";
+		// if ($strChecked !== '') {
+		if ($strStatus == 'btSort') {
+			// $sql = "UPDATE channels SET status=\"$strStatus\" WHERE id IN(\"$strChecked\");";
 			// var_dump($sql);
 			// die;
-			$stmt = $pdo->prepare($sql);
-			$stmt->execute();
+			// $stmt = $pdo->prepare($sql);
+			// $stmt->execute();
 			
-			$htmlBody .= 'Upated Channels Status: ' . count($arrChecked) . '<br>';
+			$htmlBody .= 'Upated Channels Order.<br>';
 		} else {
-			$htmlBody .= 'Channels Status up to date.<br>';
+			// $htmlBody .= 'Upated Channels Status: ' . count($arrChecked) . '<br>';
+			$htmlBody .= 'Upated Channels Status.<br>';
+			// $htmlBody .= 'Channels Status up to date.<br>';
 		}
 		
 		echo $htmlBody;
@@ -594,7 +602,8 @@ function _updateChannels($service, $pdo, &$htmlBody) {
 		<title>My Prime</title>
 		<!-- Tablesorter: required -->
 		<script src="js/jquery-latest.min.js"></script>
-		<script src="js/jquery.tablesorter.js"></script>
+		<!--<script src="js/jquery.tablesorter.js"></script>-->
+		<script src="js/jquery.tablesorter.min.js"></script>
 		<script src="js/widgets/widget-filter.min.js"></script>
 		<script src="js/widgets/widget-storage.js"></script>
 
@@ -612,7 +621,10 @@ function _updateChannels($service, $pdo, &$htmlBody) {
 		<!-- Tablesorter: optional -->
 		<link rel="stylesheet" href="css/jquery.tablesorter.pager.min.css">
 		<script src="js/extras/jquery.tablesorter.pager.min.js"></script>
-		<script src="js/jquery.tablesorter.widgets.min.js"></script>
+		<!--<script src="js/jquery.tablesorter.widgets.min.js"></script>
+		
+		<!-- DRAG -->
+		<script src="js/jquery-ui.min.js"></script>
 		
 		<!-- My Prime -->
 		<link href="css/my-prime.css" rel="stylesheet">
@@ -644,6 +656,7 @@ function _updateChannels($service, $pdo, &$htmlBody) {
 				<input type='checkbox' id='checkAll' /> Check All 
 				<button type="button" id="btnIgnore" class="download">Hide selected</button>
 				<button type="button" id="btnUnignore" class="download">Show selected</button>
+				<button type="button" id="btnSort" class="download">Save channel order</button>
 				<span id='status'></span>
 			</div>
 			
