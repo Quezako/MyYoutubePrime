@@ -3,10 +3,11 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 // Call set_include_path() as needed to point to your client library.
-require_once 'src/Google/autoload.php';
-require_once 'src/Google/Client.php';
-require_once 'src/Google/Service/YouTube.php';
+// require_once 'src/Google/autoload.php';
+// require_once 'src/Google/Client.php';
+// require_once 'src/Google/Service/YouTube.php';
 require_once 'config.php';
+require_once 'vendor/autoload.php';
 
 session_start();
 
@@ -83,7 +84,8 @@ if (isset($_GET['code']) && ! isset($dbToken)) {
     $dbToken = $client->getAccessToken();
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array(
-        ':token' => $dbToken,
+        //':token' => $dbToken,
+        ':token' => json_encode($dbToken),
         ':type' => 'token'
     ));
     
@@ -133,11 +135,13 @@ if ($client->getAccessToken()) {
     $dbToken = $client->getAccessToken();
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array(
-        ':token' => $dbToken,
+        // ':token' => $dbToken,
+		':token' => json_encode($dbToken),
         ':type' => 'token'
     ));
     
-    if (isset(json_decode($client->getAccessToken())->refresh_token)) {
+    //if (isset(json_decode($client->getAccessToken())->refresh_token)) {
+	if (isset(($client->getAccessToken())->refresh_token)) {
         if (isset($dbRefreshToken)) {
             $sql = "UPDATE token SET token=:token WHERE type=:type";
         } else {
@@ -172,113 +176,6 @@ if ($client->getAccessToken()) {
 
 
 $htmlBody = '';
-/*
-$htmlSelect = '';
-$htmlOptions = '';
-$htmlImages = '';
-$strPlaylist = 'Watch Later';
-$videoIds = isset($_GET['video_ids']) ? $_GET['video_ids'] : '';
-$playlistId = isset($_GET['playlist_id']) ? $_GET['playlist_id'] : '';
-// Define an object that will be used to make all API requests.
-$youtube = new Google_Service_YouTube($client);
-
-// Get all the playlists and generate a select list.
-$playlistsResponse = $youtube->playlists->listPlaylists('snippet', [
-	'mine' => 'true',
-	'maxResults' => 50
-]);
-
-// Get order from DB.
-$stmt = $pdo->prepare("SELECT * FROM playlists");
-$stmt->execute();
-$results = $stmt->fetchAll();
-usort($results, function ($a, $b) {
-	return $a['weight'] - $b['weight'];
-});
-
-$arrHtmlImages = [];
-$arrHtmlImages2 = [];
-
-// Watch Later playlist.
-$arrHtmlImages[-1] = "<div>Watch Later<br /><input type='text' id='' name='' value=''
-	style='background-image: url(http://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg);background-size: 100%;'
-	onDrop='convert(event);' onPaste='convert(event);' /></div>";
-
-foreach ($playlistsResponse['items'] as $playlist) {
-	$tmp = "<div>{$playlist['snippet']['title']}<br /><input type='text' id='{$playlist['id']}' name='{$playlist['id']}' value=''
-		style='background-image: url({$playlist['snippet']['thumbnails']['medium']['url']});background-size: 100%;'
-		onDrop='convert(event);' onPaste='convert(event);' /></div>";
-	$key = array_search($playlist['id'], array_column($results, 'id'));
-	
-	if ($key !== false) {
-		$arrHtmlImages[$key] = $tmp;
-	} else {
-		$arrHtmlImages2[] = $tmp;
-	}
-	
-	if ($playlist['id'] === $playlistId) {
-		$strPlaylist = $playlist['snippet']['title'];
-	}
-}
-
-ksort($arrHtmlImages);
-
-$htmlImages = implode($arrHtmlImages).implode($arrHtmlImages2);
-
-if ($videoIds !== '') {
-	try {
-		if ($playlistId === '') {
-			// Call the channels.list method to retrieve information about the currently authenticated user's channel.
-			$channelsResponse = $youtube->channels->listChannels('contentDetails', array(
-				'mine' => 'true'
-			));
-			
-			foreach ($channelsResponse['items'] as $channel) {
-				// Extract the unique playlist ID that identifies the list of videos uploaded to the channel, and then call the playlistItems.list method to retrieve that list.
-				$playlistId = $channel['contentDetails']['relatedPlaylists']['watchLater'];
-			}
-		}
-		
-		// This code adds a video to the playlist. First, define the resource being added to the playlist by setting its video ID and kind.
-		$resourceId = new Google_Service_YouTube_ResourceId();
-		$resourceId->setVideoId($videoIds);
-		$resourceId->setKind('youtube#video');
-		
-		// Then define a snippet for the playlist item. Set the playlist item's title if you want to display a different value than the title of the video being added.
-		// Add the resource ID and the playlist ID retrieved in step 4 to the snippet as well.
-		$playlistItemSnippet = new Google_Service_YouTube_PlaylistItemSnippet();
-		$playlistItemSnippet->setTitle('First video in the test playlist');
-		$playlistItemSnippet->setPlaylistId($playlistId);
-		$playlistItemSnippet->setResourceId($resourceId);
-		
-		// Finally, create a playlistItem resource and add the snippet to the resource, then call the playlistItems.insert method to add the playlist item.
-		$playlistItem = new Google_Service_YouTube_PlaylistItem();
-		$playlistItem->setSnippet($playlistItemSnippet);
-		$resPlaylistItem = $youtube->playlistItems->insert('snippet,contentDetails', $playlistItem, array());
-		
-		$htmlBody .= "<p style='color:green'>Added to $strPlaylist:</p>";
-		$htmlBody .= sprintf('<p style="text-align: left;">%s (%s)</p>', $resPlaylistItem['snippet']['title'], $resPlaylistItem['id']);
-	} catch (Google_ServiceException $e) {
-		$htmlBody .= sprintf('<p>A service error occurred: <code>%s</code></p>', htmlspecialchars($e->getMessage()));
-	} catch (Google_Exception $e) {
-		if ($e->getErrors()[0]['reason'] == 'videoAlreadyInPlaylist') {
-			$htmlBody .= '<p style="color:orange">Video already added to Watch Later.</p>';
-		} else {
-			$htmlBody .= sprintf('<p style="color:red">A client error occurred: <code>%s</code></p>', htmlspecialchars($e->getMessage()));
-		}
-	}
-} else {
-	$htmlBody = '<p style="color:purple">No video ID specified.</p>';
-}
-
-$htmlBody = "<div id='message'>$htmlBody</div>$htmlImages<br />";
-*/
-
-// $api_key = 'your-api-key';
-
-// $playlist_id =  'PL52YqI0PbEYU1_3bne33bXQYAviFN8AD4'; 
-// $api_url = 'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=25&playlistId='. $playlist_id . '&key=' . $api_key;
-// $playlist = json_decode(file_get_contents($api_url));
 
 // Define an object that will be used to make all API requests.
 $youtube = new Google_Service_YouTube($client);

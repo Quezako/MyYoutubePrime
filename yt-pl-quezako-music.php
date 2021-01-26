@@ -3,10 +3,11 @@ error_reporting(E_ALL);
 ini_set("display_errors", 1);
 
 // Call set_include_path() as needed to point to your client library.
-require_once 'src/Google/autoload.php';
-require_once 'src/Google/Client.php';
-require_once 'src/Google/Service/YouTube.php';
+// require_once 'src/Google/autoload.php';
+// require_once 'src/Google/Client.php';
+// require_once 'src/Google/Service/YouTube.php';
 require_once 'config.php';
+require_once 'vendor/autoload.php';
 
 session_start();
 
@@ -83,7 +84,8 @@ if (isset($_GET['code']) && ! isset($dbToken)) {
     $dbToken = $client->getAccessToken();
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array(
-        ':token' => $dbToken,
+        //':token' => $dbToken,
+        ':token' => json_encode($dbToken),
         ':type' => 'token'
     ));
     
@@ -230,11 +232,13 @@ if ($client->getAccessToken()) {
         $dbToken = $client->getAccessToken();
         $stmt = $pdo->prepare($sql);
         $stmt->execute(array(
-            ':token' => $dbToken,
+            //':token' => $dbToken,
+            ':token' => json_encode($dbToken),
             ':type' => 'token'
         ));
         
-        if (isset(json_decode($client->getAccessToken())->refresh_token)) {
+    //if (isset(json_decode($client->getAccessToken())->refresh_token)) {
+    if (isset(($client->getAccessToken())->refresh_token)) {
             if (isset($dbRefreshToken)) {
                 $sql = "UPDATE token SET token=:token WHERE type=:type";
             } else {

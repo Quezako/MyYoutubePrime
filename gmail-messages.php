@@ -2,10 +2,11 @@
 error_reporting(E_ALL);
 ini_set("display_errors", 1);
 
-require_once 'src/Google/autoload.php';
-require_once 'src/Google/Client.php';
-require_once 'src/Google/Service/Gmail.php';
+// require_once 'src/Google/autoload.php';
+// require_once 'src/Google/Client.php';
+// require_once 'src/Google/Service/Gmail.php';
 require_once 'config.php';
+require_once 'vendor/autoload.php';
 
 session_start();
 
@@ -49,7 +50,8 @@ if (!isset($dbRefreshToken)) {
     }
 }
 
-$redirect = filter_var('https://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
+//$redirect = filter_var('https://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
+$redirect = filter_var('http://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
 
 $client = new Google_Client();
 $client->setClientId($OAUTH2_CLIENT_ID);
@@ -80,7 +82,8 @@ if (isset($_GET['code']) && ! isset($dbToken)) {
     $dbToken = $client->getAccessToken();
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array(
-        ':token' => $dbToken,
+        //':token' => $dbToken,
+        ':token' => json_encode($dbToken),
         ':type' => 'token'
     ));
     
@@ -193,11 +196,13 @@ if ($client->getAccessToken()) {
     $dbToken = $client->getAccessToken();
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array(
-        ':token' => $dbToken,
+        // ':token' => $dbToken,
+        ':token' => json_encode($dbToken),
         ':type' => 'token'
     ));
     
-    if (isset(json_decode($client->getAccessToken())->refresh_token)) {
+    //if (isset(json_decode($client->getAccessToken())->refresh_token)) {
+    if (isset(($client->getAccessToken())->refresh_token)) {
         if (isset($dbRefreshToken)) {
             $sql = "UPDATE token2 SET token=:token WHERE type=:type";
         } else {
@@ -205,6 +210,7 @@ if ($client->getAccessToken()) {
         }
         
         $dbRefreshToken = json_decode($client->getAccessToken())->refresh_token;
+        //$dbRefreshToken = ($client->getAccessToken())->refresh_token;
         $stmt = $pdo->prepare($sql);
         $stmt->execute(array(
             ':token' => $dbRefreshToken,

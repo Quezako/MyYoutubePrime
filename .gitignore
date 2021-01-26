@@ -4,3 +4,7 @@ new/config.php
 *.sqbpro
 
 vendor/
+
+config.php
+
+composer.lock

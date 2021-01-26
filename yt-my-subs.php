@@ -3,10 +3,10 @@ error_reporting(E_ALL);
 ini_set("display_errors", 1);
 
 // Call set_include_path() as needed to point to your client library.
-// require_once 'src/Google/autoload.php';
-// require_once 'src/Google/Client.php';
-// require_once 'src/Google/Service/YouTube.php';
 require_once 'config.php';
+//require_once 'src/Google/autoload.php';
+//require_once 'src/Google/Client.php';
+//require_once 'src/Google/Service/YouTube.php';
 require_once 'vendor/autoload.php';
 
 session_start();
@@ -46,7 +46,8 @@ if (!isset($dbRefreshToken)) {
     }
 }
 
-$redirect = filter_var('https://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
+//$redirect = filter_var('https://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
+$redirect = filter_var('http://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
 
 $client = new Google_Client();
 $client->setClientId($OAUTH2_CLIENT_ID);
@@ -75,6 +76,7 @@ if (isset($_GET['code']) && ! isset($dbToken)) {
     }
     
     $dbToken = $client->getAccessToken();
+    //echo '<pre>';var_dump($dbToken);die;
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array(
         //':token' => $dbToken,
@@ -89,7 +91,6 @@ if (isset($dbToken)) {
     $client->setAccessToken($dbToken);
     $token = $dbToken;
     $timeCreated = json_decode($token)->created;
-    // $timeCreated = ($token)->created;
     
     $t = time();
     $timediff = $t - $timeCreated;
@@ -230,6 +231,7 @@ if ($client->getAccessToken()) {
         ':token' => json_encode($dbToken),
         ':type' => 'token'
     ));
+    //echo '<pre>';var_dump($client->getAccessToken());die;
     
     //if (isset(json_decode($client->getAccessToken())->refresh_token)) {
     if (isset(($client->getAccessToken())->refresh_token)) {
