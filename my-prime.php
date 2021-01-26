@@ -76,6 +76,9 @@ if ($client->getAccessToken()) {
 			case '_updateVideosDetails':
 				_updateVideosDetails($service, $pdo, $htmlBody);
 				break;
+			case '_updateChannels':
+				_updateChannels($service, $pdo, $htmlBody);
+				break;
 			case '_listVideos':
 			default:
 				_listVideos($service, $pdo, $htmlBody);
@@ -208,7 +211,7 @@ END;
 <table id="groups">
 	<thead>
 		<tr>
-			<th class="group-word">Action</th> <!-- checkbox status -->
+			<th class="group-word"><input type='checkbox' id='checkAll' /> Action</th>
 			<th class="group-letter-1">Channel</th>
 			<th class="group-letter-1">Uploads</th>
 			<th class="group-date-month">Last Upload</th>
@@ -218,7 +221,7 @@ END;
 	</thead>
 	<tfoot>
 		<tr>
-			<th class="group-word">Action</th> <!-- checkbox status -->
+			<th class="group-word">Action</th>
 			<th class="group-letter-1">Channel</th>
 			<th class="group-letter-1">Uploads</th>
 			<th class="group-date-month">Last Upload</th>
@@ -283,7 +286,7 @@ function _updateVideos($service, $pdo, &$htmlBody) {
 	}
 	
     foreach ($resChannels as $row) {
-	if (isset($arrStoredVideos[$row['playlist_id']])) {
+		if (isset($arrStoredVideos[$row['playlist_id']])) {
 			$interval = date_diff(date_create($arrStoredVideos[$row['playlist_id']]), $now);
 			$dateDiff = $interval->format('%a') > 50 ? 50 : $interval->format('%a') + 1;
 		} else {
@@ -507,7 +510,7 @@ END;
 		
 		$arrTable[] = <<<END
 <tr>
-	<td><input type='checkbox'></td>
+	<td><input type='checkbox' /></td>
 	<td><a href='https://www.youtube.com/channel/{$row['channel_id']}' target='_blank'>{$row['channel_name']}</a></td>
 	<td><a href='https://www.youtube.com/watch?v={$row['id']}' target='_blank'>{$row['title']}</a></td>
 	<td>{$row['date_published']}</td>
@@ -522,7 +525,7 @@ END;
 <table id="groups">
 	<thead>
 		<tr>
-			<th class="group-word"></th>
+			<th class="group-word">Action</th>
 			<th class="group-letter-1">Channel</th>
 			<th class="group-letter-1">Video</th>
 			<th class="group-date-month">Published</th>
@@ -532,7 +535,7 @@ END;
 	</thead>
 	<tfoot>
 		<tr>
-			<th class="group-word"></th>
+			<th class="group-word">Action</th>
 			<th class="group-letter-1">Channel</th>
 			<th class="group-letter-1">Video</th>
 			<th class="group-date-month">Published</th>
@@ -545,6 +548,43 @@ END;
 	</tbody>
 </table>
 END;
+}
+
+function _updateChannels($service, $pdo, &$htmlBody) {
+	if (!isset($_POST['data'])) {
+		echo 'No POST data.';
+	} else {
+	
+		$arrChecked = [];
+		$isIgnore = $_POST['data'][0] == 'btnIgnore' ? -2 : 1;
+		
+		foreach($_POST['data'][2] as $key => $isChecked) {
+			if ($isChecked == 1) {
+				$arrChecked[] = $_POST['data'][1][$key];
+			}
+		}
+		
+		$strChecked = implode('","', $arrChecked);
+		
+		// var_dump($strChecked);
+		// die;
+		
+		if ($strChecked !== '') {
+			$sql = "UPDATE channels SET status=\"$isIgnore\" WHERE id IN(\"$strChecked\");";
+			// var_dump($sql);
+			// die;
+			$stmt = $pdo->prepare($sql);
+			$stmt->execute();
+			
+			$htmlBody .= 'Upated Channels Status: ' . count($arrChecked) . '<br>';
+		} else {
+			$htmlBody .= 'Channels Status up to date.<br>';
+		}
+		
+		echo $htmlBody;
+	}
+	
+	die;
 }
 ?>
 
@@ -574,9 +614,7 @@ END;
 		<script src="js/extras/jquery.tablesorter.pager.min.js"></script>
 		<script src="js/jquery.tablesorter.widgets.min.js"></script>
 		
-		<!-- Ouput widget -->
-		<script src="js/widgets/widget-output.js"></script>
-		
+		<!-- My Prime -->
 		<link href="css/my-prime.css" rel="stylesheet">
 		<script src="js/my-prime.js"></script>
 	</head>
@@ -587,95 +625,9 @@ END;
 		<a href="?action=_updateVideosDetails">Update Videos Details</a> - 
 		<a href="?action=_listVideos">List Videos</a>
 		<br>
-		<br>
 		<?=$htmlBody?>
 		
 		<div class="group1">
-			<h4>Table showing filter & pager support</h4>
-			<div class="btn-group">
-				<button type="button" class="btn btn-default reset">Reset</button> <!-- targeted by the "filter_reset" option -->
-
-				<!-- Split button -->
-				<div class="btn-group">
-					<button type="button" class="btn btn-default download">Output</button>
-					<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
-						<span class="caret"></span>
-						<span class="sr-only">Toggle Dropdown</span>
-					</button>
-					<ul class="dropdown-menu" role="menu">
-						<li><h5><strong>Output options</strong></h5></li>
-						<li>
-							<label>Separator: <input class="output-separator-input" type="text" size="2" value=","></label>
-							<button type="button" class="output-separator btn btn-default btn-xs active" title="comma">,</button>
-							<button type="button" class="output-separator btn btn-default btn-xs" title="semi-colon">;</button>
-							<button type="button" class="output-separator btn btn-default btn-xs" title="tab">⇥</button>
-							<button type="button" class="output-separator btn btn-default btn-xs" title="space">␣</button>
-							<button type="button" class="output-separator btn btn-default btn-xs" title="output JSON">json</button>
-							<button type="button" class="output-separator btn btn-default btn-xs" title="output Array (see note)">array</button>
-						</li>
-						<li>
-							<label>Send to:</label>
-							<div class="btn-group output-download-popup" data-toggle="buttons" title="Download file or open in Popup window">
-								<label class="btn btn-default btn-sm active">
-									<input type="radio" name="delivery1" class="output-popup" checked=""> Popup
-								</label>
-								<label class="btn btn-default btn-sm">
-									<input type="radio" name="delivery1" class="output-download"> Download
-								</label>
-							</div>
-						</li>
-						<li>
-							<label>Include:</label>
-							<div class="btn-group output-filter-all" data-toggle="buttons" title="Output only filtered, visible, selected, selected+visible or all rows">
-								<label class="btn btn-default btn-sm active">
-									<input type="radio" name="getrows1" class="output-filter" checked="checked"> Filtered
-								</label>
-								<label class="btn btn-default btn-sm">
-									<input type="radio" name="getrows1" class="output-visible"> Visible
-								</label>
-								<label class="btn btn-default btn-sm">
-									<input type="radio" name="getrows1" class="output-selected"> Selected
-								</label>
-								<label class="btn btn-default btn-sm">
-									<input type="radio" name="getrows1" class="output-sel-vis"> Sel+Vis
-								</label>
-								<label class="btn btn-default btn-sm">
-									<input type="radio" name="getrows1" class="output-all"> All
-								</label>
-							</div>
-						</li>
-						<li>
-							<button class="output-header btn btn-default btn-sm active" title="Include table header">Header</button>
-							<button class="output-footer btn btn-default btn-sm active" title="Include table footer">Footer</button>
-						</li>
-						<li class="divider"></li>
-						<li>
-							<label>Replace quotes: <input class="output-replacequotes" type="text" size="2" value="'"></label>
-							<button type="button" class="output-quotes btn btn-default btn-xs active" title="single quote">'</button>
-							<button type="button" class="output-quotes btn btn-default btn-xs" title="left double quote">“</button>
-							<button type="button" class="output-quotes btn btn-default btn-xs" title="escaped quote">\"</button>
-						</li>
-						<li><label title="Remove extra white space from each cell">Trim spaces: <input class="output-trim" type="checkbox" checked=""></label></li>
-						<li><label title="Include HTML from cells in output">Include HTML: <input class="output-html" type="checkbox"></label></li>
-						<li><label title="Wrap all values in quotes">Wrap in Quotes: <input class="output-wrap" type="checkbox"></label></li>
-						<li><label title="Choose a download filename">Filename: <input class="output-filename" type="text" size="15" value="mytable.csv"></label></li>
-					</ul>
-				</div>
-			</div>
-
-			<!--<div class="ts-pager form-horizontal">
-				<button type="button" class="btn btn-default btn-sm first"><i class="glyphicon glyphicon-step-backward"></i></button>
-				<button type="button" class="btn btn-default btn-sm prev"><i class="glyphicon glyphicon-backward"></i></button>
-				<span class="pagedisplay"></span>
-				<button type="button" class="btn btn-default btn-sm next"><i class="glyphicon glyphicon-forward"></i></button>
-				<button type="button" class="btn btn-default btn-sm last"><i class="glyphicon glyphicon-step-forward"></i></button>
-				<select class="pagesize form-control btn-sm" title="Select page size">
-					<option selected="selected" value="5">5</option>
-					<option value="10">10</option>
-				</select>
-				<select class="gotoPage form-control btn-sm" title="Select page number"></select>
-			</div>-->
-			
 			<div class="pager">
 				Page: <select class="gotoPage"></select>
 				<img src="img/icons/first.png" class="first" alt="First" title="First page" />
@@ -688,7 +640,11 @@ END;
 					<option value="100">100</option>
 					<option value="200">200</option>
 					<option value="500">500</option>
-				</select>
+				</select> | 
+				<input type='checkbox' id='checkAll' /> Check All 
+				<button type="button" id="btnIgnore" class="download">Hide selected</button>
+				<button type="button" id="btnUnignore" class="download">Show selected</button>
+				<span id='status'></span>
 			</div>
 			
 			<?=$table?>
