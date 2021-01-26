@@ -6,19 +6,12 @@ session_start();
 header('Pragma: public'); 	// required
 header('Content-Description: File Transfer');
 header('Content-Type: application/octet-stream');
-// header('Content-Type: application/force-download');
-// header('Content-Disposition: attachment; filename="'.basename($filepath).'"');
 header('Content-Disposition: attachment; filename="yt-my-subs.php.html"');
 header('Expires: 0');
-// header('Cache-Control: must-revalidate');
 header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
 header('Cache-Control: private', false);
 header('Content-Transfer-Encoding: binary');
-// header('Content-Length: ' . filesize($filepath));
-// header('Connection: close');
 flush(); // Flush system output buffer
-// readfile($filepath);
-//die();
 ini_set('max_execution_time', 600); //300 seconds = 5 minutes
 set_time_limit(600);
 
@@ -64,7 +57,6 @@ if (!isset($dbRefreshToken)) {
     }
 }
 
-//$redirect = filter_var('https://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
 $redirect = filter_var('http://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
 
 $client = new Google_Client();
@@ -224,7 +216,7 @@ if ($client->getAccessToken()) {
 
     $strSubs = implode(",", array_keys($arrSubs));
 	// echo $strSubs;die;
-           
+    
     $queryParams = [
        'id' => $strSubs
     ];
@@ -325,7 +317,6 @@ if ($client->getAccessToken()) {
 		
         foreach ($resVideos->items as $video) {
             $arrVideos[$video->id]['duration'] = covtime($video->contentDetails->duration);
-            //$arrVideos[$video->id]['publishedMonth'] .= '-'.(999 - sprintf('%03d', covtime($video->contentDetails->duration)));
             $arrVideos[$video->id]['publishedMonth'] = str_replace('-', '', $arrVideos[$video->id]['publishedMonth']).(999 - sprintf('%03d', covtime($video->contentDetails->duration)));
         }
     }
@@ -339,7 +330,6 @@ if ($client->getAccessToken()) {
         // 'japon short' => 'PL52YqI0PbEYWYGVaDb7WaotZw1-DqeIbt',
         'japon' => 'PL52YqI0PbEYXzJuYKJFyCCu1lREuoMhnO',
         'podcast' => 'PL52YqI0PbEYUxtItqu6WAIqj1C7hX4LUL',
-		
     ];
 
     $strMyPlaylists = implode(',', $arrMyPlaylists);
@@ -356,7 +346,6 @@ if ($client->getAccessToken()) {
             ];
             
             $myPlaylistItems = $service->playlistItems->listPlaylistItems('contentDetails', $queryParams);
-			// echo 'myPlaylistItems<br>';
             $pageToken = $myPlaylistItems->nextPageToken;
             $arrMyPlaylistItems[] = $myPlaylistItems;
         }
@@ -374,9 +363,7 @@ if ($client->getAccessToken()) {
             return $b['publishedMonth'] <=> $a['publishedMonth'];
         }
     });
-	
-	//usort($arrVideos, "cmp");
-	
+		
     $strMonth = '';
 
     foreach ($arrVideos as $videos) {
@@ -399,13 +386,6 @@ if ($client->getAccessToken()) {
     $authUrl = $client->createAuthUrl();
     $htmlBody = "<p>Authorization Required</p><p>You need to <a href='$authUrl'>authorize access</a> before proceeding.<p>";
 }
-
-/*
-function cmp($a, $b)
-{
-    return strcmp($a["publishedMonth"], $b["publishedMonth"]);
-}
-*/
 
 function covtime($youtube_time){    
     if($youtube_time) {
