@@ -59,11 +59,29 @@ try {
 // Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
 	try {
-		// _updateSubscriptions($service, $pdo, $htmlBody);
-		// _listSubscriptions($service, $pdo, $table);
-		// _updateVideos($service, $pdo, $htmlBody);
-		// _updateVideosDetails($service, $pdo, $htmlBody);
-		_listVideos($service, $pdo, $htmlBody);
+		if (!isset($_GET['action'])) {
+			$_GET['action'] = '_listVideos';
+		}
+		
+		switch ($_GET['action']) {
+			case '_updateSubscriptions':
+				_updateSubscriptions($service, $pdo, $htmlBody);
+				break;
+			case '_listSubscriptions':
+				_listSubscriptions($service, $pdo, $table);
+				break;
+			case '_updateVideos':
+				_updateVideos($service, $pdo, $htmlBody);
+				break;
+			case '_updateVideosDetails':
+				_updateVideosDetails($service, $pdo, $htmlBody);
+				break;
+			case '_listVideos':
+			default:
+				_listVideos($service, $pdo, $htmlBody);
+				break;
+		}
+	
 	} catch (Google_Service_Exception $e) {
 		$htmlBody .= sprintf('<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
 		($e->getMessage()));
@@ -180,6 +198,7 @@ function _listSubscriptions($service, $pdo, &$table) {
 	<td><a href='https://www.youtube.com/playlist?list={$row['playlist_id']}' target='_blank'>{$row['name']}</a></td>
 	<td>{$row['date_last_upload']}</td>
 	<td>{$row['date_checked']}</td>
+	<td>{$row['status']}</td>
 </tr>
 END;
     }
@@ -189,20 +208,22 @@ END;
 <table id="groups">
 	<thead>
 		<tr>
-			<th class="group-word"></th> <!-- checkbox status -->
+			<th class="group-word">Action</th> <!-- checkbox status -->
 			<th class="group-letter-1">Channel</th>
 			<th class="group-letter-1">Uploads</th>
 			<th class="group-date-month">Last Upload</th>
 			<th class="group-date-month">Checked</th>
+			<th class="group-date-month">Status</th>
 		</tr>
 	</thead>
 	<tfoot>
 		<tr>
-			<th class="group-word"></th> <!-- checkbox status -->
+			<th class="group-word">Action</th> <!-- checkbox status -->
 			<th class="group-letter-1">Channel</th>
 			<th class="group-letter-1">Uploads</th>
 			<th class="group-date-month">Last Upload</th>
 			<th class="group-date-month">Checked</th>
+			<th class="group-date-month">Status</th>
 		</tr>
 	</tfoot>
 	<tbody>
@@ -462,7 +483,8 @@ function _listVideos($service, $pdo, &$table) {
 		FROM videos 
 		LEFT JOIN playlists ON videos.my_playlist_id=playlists.id
 		LEFT JOIN channels ON videos.playlist_id=channels.playlist_id
-		LIMIT 100
+		WHERE videos.my_playlist_id=0
+		-- LIMIT 100
 END;
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
@@ -471,6 +493,18 @@ END;
     $arrTable = [];
 	
     foreach ($resChannels as $row) {
+		if ($row['my_playlist_id'] == "0") {
+			$status = "To sort";
+		} elseif ($row['my_playlist_id'] == "1") {
+			$status = "Liked";
+		} elseif ($row['my_playlist_id'] == "-1") {
+			$status = "Disliked";
+		} elseif ($row['my_playlist_id'] == "2") {
+			$status = "Ignored";
+		} else {
+			$status = "<a href='https://www.youtube.com/playlist?list={$row['my_playlist_id']}' target='_blank'>{$row['my_playlist_name']}</a>";
+		}
+		
 		$arrTable[] = <<<END
 <tr>
 	<td><input type='checkbox'></td>
@@ -478,7 +512,7 @@ END;
 	<td><a href='https://www.youtube.com/watch?v={$row['id']}' target='_blank'>{$row['title']}</a></td>
 	<td>{$row['date_published']}</td>
 	<td>{$row['date_checked']}</td>
-	<td><a href='https://www.youtube.com/playlist?list={$row['my_playlist_id']}' target='_blank'>{$row['my_playlist_name']}</a></td>
+	<td>$status</td>
 </tr>
 END;
     }
@@ -493,7 +527,7 @@ END;
 			<th class="group-letter-1">Video</th>
 			<th class="group-date-month">Published</th>
 			<th class="group-date-month">Checked</th>
-			<th class="group-date-month">My playlist</th>
+			<th class="group-date-month">Status</th>
 		</tr>
 	</thead>
 	<tfoot>
@@ -503,7 +537,7 @@ END;
 			<th class="group-letter-1">Video</th>
 			<th class="group-date-month">Published</th>
 			<th class="group-date-month">Checked</th>
-			<th class="group-date-month">My playlist</th>
+			<th class="group-date-month">Status</th>
 		</tr>
 	</tfoot>
 	<tbody>
@@ -517,26 +551,147 @@ END;
 <!doctype html>
 <html>
 	<head>
-	<title>My Prime</title>
-	</head>
-	<body>
+		<title>My Prime</title>
 		<!-- Tablesorter: required -->
-		<link href="css/theme.blue.css" rel="stylesheet">
 		<script src="js/jquery-latest.min.js"></script>
 		<script src="js/jquery.tablesorter.js"></script>
 		<script src="js/widgets/widget-filter.min.js"></script>
 		<script src="js/widgets/widget-storage.js"></script>
 
+		<!-- Theme -->
+		<link rel="stylesheet" href="css/bootstrap-v3.min.css">
+		<link rel="stylesheet" href="css/theme.bootstrap.css">
+		<link rel="stylesheet" href="css/theme.blue.css">
+		<script src="js/bootstrap.min.js"></script>
+		
 		<!-- Grouping widget -->
 		<script src="js/parsers/parser-input-select.min.js"></script>
 		<script src="js/parsers/parser-date-weekday.min.js"></script>
 		<script src="js/widgets/widget-grouping.min.js"></script>
 		
+		<!-- Tablesorter: optional -->
+		<link rel="stylesheet" href="css/jquery.tablesorter.pager.min.css">
+		<script src="js/extras/jquery.tablesorter.pager.min.js"></script>
+		<script src="js/jquery.tablesorter.widgets.min.js"></script>
+		
+		<!-- Ouput widget -->
+		<script src="js/widgets/widget-output.js"></script>
+		
 		<link href="css/my-prime.css" rel="stylesheet">
 		<script src="js/my-prime.js"></script>
-		<pre>
-			<?=$htmlBody?>
-		</pre>
-		<?=$table?>
+	</head>
+	<body>
+		<a href="?action=_updateSubscriptions">Update Subscriptions</a> - 
+		<a href="?action=_listSubscriptions">List Subscriptions</a> - 
+		<a href="?action=_updateVideos">Update Videos</a> - 
+		<a href="?action=_updateVideosDetails">Update Videos Details</a> - 
+		<a href="?action=_listVideos">List Videos</a>
+		<br>
+		<br>
+		<?=$htmlBody?>
+		
+		<div class="group1">
+			<h4>Table showing filter & pager support</h4>
+			<div class="btn-group">
+				<button type="button" class="btn btn-default reset">Reset</button> <!-- targeted by the "filter_reset" option -->
+
+				<!-- Split button -->
+				<div class="btn-group">
+					<button type="button" class="btn btn-default download">Output</button>
+					<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+						<span class="caret"></span>
+						<span class="sr-only">Toggle Dropdown</span>
+					</button>
+					<ul class="dropdown-menu" role="menu">
+						<li><h5><strong>Output options</strong></h5></li>
+						<li>
+							<label>Separator: <input class="output-separator-input" type="text" size="2" value=","></label>
+							<button type="button" class="output-separator btn btn-default btn-xs active" title="comma">,</button>
+							<button type="button" class="output-separator btn btn-default btn-xs" title="semi-colon">;</button>
+							<button type="button" class="output-separator btn btn-default btn-xs" title="tab">⇥</button>
+							<button type="button" class="output-separator btn btn-default btn-xs" title="space">␣</button>
+							<button type="button" class="output-separator btn btn-default btn-xs" title="output JSON">json</button>
+							<button type="button" class="output-separator btn btn-default btn-xs" title="output Array (see note)">array</button>
+						</li>
+						<li>
+							<label>Send to:</label>
+							<div class="btn-group output-download-popup" data-toggle="buttons" title="Download file or open in Popup window">
+								<label class="btn btn-default btn-sm active">
+									<input type="radio" name="delivery1" class="output-popup" checked=""> Popup
+								</label>
+								<label class="btn btn-default btn-sm">
+									<input type="radio" name="delivery1" class="output-download"> Download
+								</label>
+							</div>
+						</li>
+						<li>
+							<label>Include:</label>
+							<div class="btn-group output-filter-all" data-toggle="buttons" title="Output only filtered, visible, selected, selected+visible or all rows">
+								<label class="btn btn-default btn-sm active">
+									<input type="radio" name="getrows1" class="output-filter" checked="checked"> Filtered
+								</label>
+								<label class="btn btn-default btn-sm">
+									<input type="radio" name="getrows1" class="output-visible"> Visible
+								</label>
+								<label class="btn btn-default btn-sm">
+									<input type="radio" name="getrows1" class="output-selected"> Selected
+								</label>
+								<label class="btn btn-default btn-sm">
+									<input type="radio" name="getrows1" class="output-sel-vis"> Sel+Vis
+								</label>
+								<label class="btn btn-default btn-sm">
+									<input type="radio" name="getrows1" class="output-all"> All
+								</label>
+							</div>
+						</li>
+						<li>
+							<button class="output-header btn btn-default btn-sm active" title="Include table header">Header</button>
+							<button class="output-footer btn btn-default btn-sm active" title="Include table footer">Footer</button>
+						</li>
+						<li class="divider"></li>
+						<li>
+							<label>Replace quotes: <input class="output-replacequotes" type="text" size="2" value="'"></label>
+							<button type="button" class="output-quotes btn btn-default btn-xs active" title="single quote">'</button>
+							<button type="button" class="output-quotes btn btn-default btn-xs" title="left double quote">“</button>
+							<button type="button" class="output-quotes btn btn-default btn-xs" title="escaped quote">\"</button>
+						</li>
+						<li><label title="Remove extra white space from each cell">Trim spaces: <input class="output-trim" type="checkbox" checked=""></label></li>
+						<li><label title="Include HTML from cells in output">Include HTML: <input class="output-html" type="checkbox"></label></li>
+						<li><label title="Wrap all values in quotes">Wrap in Quotes: <input class="output-wrap" type="checkbox"></label></li>
+						<li><label title="Choose a download filename">Filename: <input class="output-filename" type="text" size="15" value="mytable.csv"></label></li>
+					</ul>
+				</div>
+			</div>
+
+			<!--<div class="ts-pager form-horizontal">
+				<button type="button" class="btn btn-default btn-sm first"><i class="glyphicon glyphicon-step-backward"></i></button>
+				<button type="button" class="btn btn-default btn-sm prev"><i class="glyphicon glyphicon-backward"></i></button>
+				<span class="pagedisplay"></span>
+				<button type="button" class="btn btn-default btn-sm next"><i class="glyphicon glyphicon-forward"></i></button>
+				<button type="button" class="btn btn-default btn-sm last"><i class="glyphicon glyphicon-step-forward"></i></button>
+				<select class="pagesize form-control btn-sm" title="Select page size">
+					<option selected="selected" value="5">5</option>
+					<option value="10">10</option>
+				</select>
+				<select class="gotoPage form-control btn-sm" title="Select page number"></select>
+			</div>-->
+			
+			<div class="pager">
+				Page: <select class="gotoPage"></select>
+				<img src="img/icons/first.png" class="first" alt="First" title="First page" />
+				<img src="img/icons/prev.png" class="prev" alt="Prev" title="Previous page" />
+				<span class="pagedisplay"></span>
+				<img src="img/icons/next.png" class="next" alt="Next" title="Next page" />
+				<img src="img/icons/last.png" class="last" alt="Last" title= "Last page" />
+				<select class="pagesize">
+					<option value="50">50</option>
+					<option value="100">100</option>
+					<option value="200">200</option>
+					<option value="500">500</option>
+				</select>
+			</div>
+			
+			<?=$table?>
+		</div>
 	</body>
 </html>
