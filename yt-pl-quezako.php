@@ -6,12 +6,13 @@ ini_set("display_errors", 1);
 require_once 'src/Google/autoload.php';
 require_once 'src/Google/Client.php';
 require_once 'src/Google/Service/YouTube.php';
+require_once 'config.php';
 
 session_start();
 
 // SQLite.
 try {
-    $pdo = new PDO('sqlite:' . dirname(__FILE__) . '/database.sqlite');
+    $pdo = new PDO('sqlite:' . dirname(__FILE__) . '/db-quezako.sqlite');
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
 } catch (Exception $e) {
@@ -19,7 +20,7 @@ try {
     die();
 }
 
-$pdo->query("CREATE TABLE IF NOT EXISTS token ( 
+$pdo->query("CREATE TABLE IF NOT EXISTS token (
     token VARCHAR( 500 ),
     type VARCHAR( 16 )
 );");
@@ -29,18 +30,18 @@ $stmt->execute(array(
     'type' => 'token'
 ));
 $result = $stmt->fetch();
-$DbToken = isset($result['token']) ? $result['token'] : null;
+$dbToken = isset($result['token']) ? $result['token'] : null;
 
 $stmt->execute(array(
     'type' => 'refreshtoken'
 ));
 $result = $stmt->fetch();
-$DbRefreshToken = isset($result['token']) ? $result['token'] : null;
+$dbRefreshToken = isset($result['token']) ? $result['token'] : null;
 
-if (! isset($DbRefreshToken)) {
-    if ($DbToken) {
-        $refresh_token = json_decode($DbToken)->refresh_token;
-        $DbRefreshToken = isset($refresh_token) ? $refresh_token : null;
+if (!isset($dbRefreshToken)) {
+    if ($dbToken) {
+        $refreshToken = json_decode($dbToken)->refresh_token;
+        $dbRefreshToken = isset($refreshToken) ? $refreshToken : null;
     }
 }
 
@@ -51,10 +52,7 @@ if (! isset($DbRefreshToken)) {
  * <https://developers.google.com/youtube/v3/guides/authentication>
  * Please ensure that you have enabled the YouTube Data API for your project.
  */
-$OAUTH2_CLIENT_ID = '783345186714-ccb51ra3dco2cggqov6fq94mui5c6ivs.apps.googleusercontent.com';
-$OAUTH2_CLIENT_SECRET = 'ke4HnT7UaboMoThsQSSYJMiO';
-$DEVKEY = 'AIzaSyCF7pqZQO-d4tj2OpiycHYI29-Sq7gTLt0';
-$redirect = filter_var('http://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
+$redirect = filter_var('https://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
 
 $client = new Google_Client();
 $client->setClientId($OAUTH2_CLIENT_ID);
@@ -67,7 +65,7 @@ $client->setAccessType('offline');
 $timediff = 9999;
 $token = '';
 
-if (isset($_GET['code']) && ! isset($DbToken)) {
+if (isset($_GET['code']) && ! isset($dbToken)) {
     if (isset($_GET['state'])) {
         if (strval($_SESSION['state']) !== strval($_GET['state'])) {
             die('The session state did not match.');
@@ -76,39 +74,39 @@ if (isset($_GET['code']) && ! isset($DbToken)) {
     
     $client->authenticate($_GET['code']);
     
-    if (isset($DbToken)) {
+    if (isset($dbToken)) {
         $sql = "UPDATE token SET token=:token WHERE type=:type";
     } else {
         $sql = "INSERT INTO token (token,type) VALUES (:token,:type)";
     }
     
-    $DbToken = $client->getAccessToken();
+    $dbToken = $client->getAccessToken();
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array(
-        ':token' => $DbToken,
+        ':token' => $dbToken,
         ':type' => 'token'
     ));
     
-    header('Location: ' . $redirect);
+    header('Location: '.$redirect);
 }
 
-if (isset($DbToken)) {
-    $client->setAccessToken($DbToken);
-    $token = $DbToken;
-    $time_created = json_decode($token)->created;
+if (isset($dbToken)) {
+    $client->setAccessToken($dbToken);
+    $token = $dbToken;
+    $timeCreated = json_decode($token)->created;
     
     $t = time();
-    $timediff = $t - $time_created;
-    $refreshToken = $DbRefreshToken;
+    $timediff = $t - $timeCreated;
+    $refreshToken = $dbRefreshToken;
 }
 
 // Resets token if expired.
-if ($timediff > 3600 && $token != '') {
+if ($timediff > 3600 && $token !== '') {
     // If a refresh token is in there.
-    if (isset($DbRefreshToken)) {
-        $token = $DbToken;
-        $refresh_created = json_decode($token)->created;
-        $refreshtimediff = $t - $refresh_created;
+    if (isset($dbRefreshToken)) {
+        $token = $dbToken;
+        $refreshCreated = json_decode($token)->created;
+        $refreshtimediff = $t - $refreshCreated;
         
         // If refresh token is expired.
         if ($refreshtimediff > 3600) {
@@ -129,8 +127,8 @@ if ($client->getAccessToken()) {
     $htmlOptions = '';
     $htmlImages = '';
     $strPlaylist = 'Watch Later';
-    $video_ids = isset($_GET['video_ids']) ? $_GET['video_ids'] : '';
-    $playlist_id = isset($_GET['playlist_id']) ? $_GET['playlist_id'] : '';
+    $videoIds = isset($_GET['video_ids']) ? $_GET['video_ids'] : '';
+    $playlistId = isset($_GET['playlist_id']) ? $_GET['playlist_id'] : '';
     // Define an object that will be used to make all API requests.
     $youtube = new Google_Service_YouTube($client);
     
@@ -140,44 +138,46 @@ if ($client->getAccessToken()) {
         'maxResults' => 50
     ]);
     
-	// Get order from DB.
+    // Get order from DB.
     $stmt = $pdo->prepare("SELECT * FROM playlists");
     $stmt->execute();
     $results = $stmt->fetchAll();
-    usort($results, function($a, $b) {
+    usort($results, function ($a, $b) {
         return $a['weight'] - $b['weight'];
     });
+
     $arrHtmlImages = [];
     $arrHtmlImages2 = [];
     
+    // Watch Later playlist.
+    $arrHtmlImages[-1] = "<div>Watch Later<br /><input type='text' id='' name='' value=''
+    	style='background-image: url(https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg);background-size: 100%;'
+    	onDrop='convert(event);' onPaste='convert(event);' /></div>";
+    
     foreach ($playlistsResponse['items'] as $playlist) {
-        // Do not show Music playlists.
-        //if (!strstr($playlist['snippet']['title'], 'Music')) {
-            $tmp = "{$playlist['snippet']['title']}<br /><input type='text' id='{$playlist['id']}' name='{$playlist['id']}' value='' style='background: url({$playlist['snippet']['thumbnails']['medium']['url']});background-size: 100%;' onDrop='convert(event);' /><br />";
-            $key = array_search($playlist['id'], array_column($results, 'id'));
-            
-            if ($key !== false) {
-                $arrHtmlImages[$key] = $tmp;
-            } else {
-                $arrHtmlImages2[] = $tmp;
-            }
-            
-            if ($playlist['id'] == $playlist_id) {
-                $strPlaylist = $playlist['snippet']['title'];
-            }
-        //}
+        $tmp = "<div>{$playlist['snippet']['title']}<br /><input type='text' id='{$playlist['id']}' name='{$playlist['id']}' value=''
+        	style='background-image: url({$playlist['snippet']['thumbnails']['medium']['url']});background-size: 100%;'
+        	onDrop='convert(event);' onPaste='convert(event);' /></div>";
+        $key = array_search($playlist['id'], array_column($results, 'id'));
+        
+        if ($key !== false) {
+            $arrHtmlImages[$key] = $tmp;
+        } else {
+            $arrHtmlImages2[] = $tmp;
+        }
+        
+        if ($playlist['id'] === $playlistId) {
+            $strPlaylist = $playlist['snippet']['title'];
+        }
     }
     
     ksort($arrHtmlImages);
     
-    $htmlImages = implode($arrHtmlImages);
-    $htmlImages .= implode($arrHtmlImages2);
+    $htmlImages = implode($arrHtmlImages).implode($arrHtmlImages2);
     
-    if ($video_ids != '') {
+    if ($videoIds !== '') {
         try {
-            if ($playlist_id != '') {
-                $playlistId = $playlist_id;
-            } else {
+            if ($playlistId === '') {
                 // Call the channels.list method to retrieve information about the currently authenticated user's channel.
                 $channelsResponse = $youtube->channels->listChannels('contentDetails', array(
                     'mine' => 'true'
@@ -191,10 +191,11 @@ if ($client->getAccessToken()) {
             
             // This code adds a video to the playlist. First, define the resource being added to the playlist by setting its video ID and kind.
             $resourceId = new Google_Service_YouTube_ResourceId();
-            $resourceId->setVideoId($video_ids);
+            $resourceId->setVideoId($videoIds);
             $resourceId->setKind('youtube#video');
             
-            // Then define a snippet for the playlist item. Set the playlist item's title if you want to display a different value than the title of the video being added. Add the resource ID and the playlist ID retrieved in step 4 to the snippet as well.
+            // Then define a snippet for the playlist item. Set the playlist item's title if you want to display a different value than the title of the video being added.
+            // Add the resource ID and the playlist ID retrieved in step 4 to the snippet as well.
             $playlistItemSnippet = new Google_Service_YouTube_PlaylistItemSnippet();
             $playlistItemSnippet->setTitle('First video in the test playlist');
             $playlistItemSnippet->setPlaylistId($playlistId);
@@ -220,34 +221,34 @@ if ($client->getAccessToken()) {
         $htmlBody = '<p style="color:purple">No video ID specified.</p>';
     }
     
-    if (isset($DbToken)) {
+    if (isset($dbToken)) {
         $sql = "UPDATE token SET token=:token WHERE type=:type";
     } else {
         $sql = "INSERT INTO token (token,type) VALUES (:token,:type)";
     }
     
-    $DbToken = $client->getAccessToken();
+    $dbToken = $client->getAccessToken();
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array(
-        ':token' => $DbToken,
+        ':token' => $dbToken,
         ':type' => 'token'
     ));
     
     if (isset(json_decode($client->getAccessToken())->refresh_token)) {
-        if (isset($DbRefreshToken)) {
+        if (isset($dbRefreshToken)) {
             $sql = "UPDATE token SET token=:token WHERE type=:type";
         } else {
             $sql = "INSERT INTO token (token,type) VALUES (:token,:type)";
         }
         
-        $DbRefreshToken = json_decode($client->getAccessToken())->refresh_token;
+        $dbRefreshToken = json_decode($client->getAccessToken())->refresh_token;
         $stmt = $pdo->prepare($sql);
         $stmt->execute(array(
-            ':token' => $DbRefreshToken,
+            ':token' => $dbRefreshToken,
             ':type' => 'refreshtoken'
         ));
-    } elseif (! isset($DbRefreshToken)) {
-        unset($DbToken);
+    } elseif (! isset($dbRefreshToken)) {
+        unset($dbToken);
         
         $stmt = $pdo->prepare("DELETE FROM token WHERE type=:type");
         $stmt->execute(array(
@@ -256,10 +257,7 @@ if ($client->getAccessToken()) {
         $client->revokeToken();
     }
     
-    $htmlBody = <<<END
-	<div id="message">$htmlBody</div>
-    $htmlImages<br />
-END;
+    $htmlBody = "<div id='message'>$htmlBody</div>$htmlImages<br />";
 } else {
     // If the user hasn't authorized the app, initiate the OAuth flow.
     $state = mt_rand();
@@ -267,10 +265,7 @@ END;
     $_SESSION['state'] = $state;
     
     $authUrl = $client->createAuthUrl();
-    $htmlBody = <<<END
-<p>Authorization Required</p>
-<p>You need to <a href="$authUrl">authorize access</a> before proceeding.<p>
-END;
+    $htmlBody = "<p>Authorization Required</p><p>You need to <a href='$authUrl'>authorize access</a> before proceeding.<p>";
 }
 ?>
 
@@ -280,31 +275,47 @@ END;
 <title>Add to Watch Later</title>
 <style>
 p, div {
-    font: 12px Arial;
-    width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+	font: 12px Arial;
+	/*width: 100%;*/
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding: 5px;
+}
+
+div {
+	width: 134px;
+	height: 50px;
+	float: left;
 }
 
 input, img {
-    width: 134px;
-    height: 40px;
-    border: 0;
+	width: 134px;
+	height: 40px;
+	border: 0;
+	background-color: #ddd;
+}
+
+#container, #message {
+	width: 100%;
+	height: 100%;
 }
 </style>
 </head>
 <body>
-    <script>
+	<script>
         function convert(event) {
             setTimeout(function () {
                 var val = decodeURIComponent(event.target.value);
-//                 console.log(document.getElementById('video_url'));
                 var vid = val.split('v=')[1];
                 
-                if (typeof vid === "undefined") {
-                    var vid = val.split('video_ids=')[1];
-                    vid = vid.split('%')[0];
+				if (typeof vid === "undefined") {
+					var vid = val.split('youtu.be/')[1];
+					
+					if (typeof vid === "undefined") {
+						var vid = val.split('video_ids=')[1];
+						vid = vid.split('%')[0];
+					}
                 }
                 
                 if (typeof vid === "undefined") {
@@ -320,7 +331,7 @@ input, img {
                 }
             }, 500, event);
         }
-        </script>
-    <div><?=$htmlBody?></div>
+    </script>
+	<div id='container'><?=$htmlBody?></div>
 </body>
 </html>

@@ -1,12 +1,12 @@
 <?php
+error_reporting(E_ALL);
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 // Call set_include_path() as needed to point to your client library.
 require_once 'src/Google/autoload.php';
 require_once 'src/Google/Client.php';
 require_once 'src/Google/Service/YouTube.php';
+require_once 'config.php';
 
 session_start();
 
@@ -52,10 +52,7 @@ if (!isset($dbRefreshToken)) {
  * <https://developers.google.com/youtube/v3/guides/authentication>
  * Please ensure that you have enabled the YouTube Data API for your project.
  */
-$OAUTH2_CLIENT_ID = '783345186714-ccb51ra3dco2cggqov6fq94mui5c6ivs.apps.googleusercontent.com';
-$OAUTH2_CLIENT_SECRET = 'ke4HnT7UaboMoThsQSSYJMiO';
-$DEVKEY = 'AIzaSyCF7pqZQO-d4tj2OpiycHYI29-Sq7gTLt0';
-$redirect = filter_var('http://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
+$redirect = filter_var('https://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
 
 $client = new Google_Client();
 $client->setClientId($OAUTH2_CLIENT_ID);

@@ -1,0 +1,5 @@
+#RewriteRule ^dashboard/index - [E=no-gzip:1]
+#SetEnvIf REDIRECT_no-gzip 1 no-gzip
+
+# exclude certain page requests (e.g. for requesting yt-pl-sorter.php?action=getFile&id=3 as non-compressed)
+#SetEnvIfNoCase Request_URI yt-pl-sorter\.php$ no-gzip dont-vary
