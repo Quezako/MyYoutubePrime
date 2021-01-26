@@ -1,9 +1,4 @@
 <?php
-/**
-TODO:
-- _updateSubscriptions: not delete. select, then update or create.
-**/
-
 error_reporting(E_ALL);
 ini_set("display_errors", 1);
 ini_set('max_execution_time', 600); //300 seconds = 5 minutes
@@ -21,13 +16,10 @@ $client = new Google_Client();
 $client->setClientId($OAUTH2_CLIENT_ID);
 $client->setClientSecret($OAUTH2_CLIENT_SECRET);
 
-// $client->setScopes('https://www.googleapis.com/auth/youtube.readonly');
 $client->setScopes('https://www.googleapis.com/auth/youtube');
-// $redirect = filter_var('http://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'], FILTER_SANITIZE_URL);
-$redirect = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
+$redirect = filter_var((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[PHP_SELF]", FILTER_SANITIZE_URL);
 $client->setRedirectUri($redirect);
 
-// Define service object for making API requests.
 $service = new Google_Service_YouTube($client);
 
 // Check if an auth token exists for the required scopes
@@ -62,30 +54,27 @@ try {
 // Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
 	try {
-		if (!isset($_GET['action'])) {
-			$_GET['action'] = '_listVideos';
-		}
-		
-		switch ($_GET['action']) {
-			case '_updateSubscriptions':
-				_updateSubscriptions($service, $pdo, $htmlBody);
-				break;
-			case '_listSubscriptions':
-				_listSubscriptions($service, $pdo, $table);
-				break;
-			case '_updateVideos':
-				_updateVideos($service, $pdo, $htmlBody);
-				break;
-			case '_updateVideosDetails':
-				_updateVideosDetails($service, $pdo, $htmlBody);
-				break;
-			case '_ajaxUpdateChannels':
-				_ajaxUpdateChannels($service, $pdo, $htmlBody);
-				break;
-			case '_listVideos':
-			default:
-				_listVideos($service, $pdo, $table);
-				break;
+		if (isset($_GET['action'])) {
+			switch ($_GET['action']) {
+				case '_updateSubscriptions':
+					_updateSubscriptions($service, $pdo, $htmlBody);
+					break;
+				case '_listSubscriptions':
+					_listSubscriptions($service, $pdo, $table);
+					break;
+				case '_updateVideos':
+					_updateVideos($service, $pdo, $htmlBody);
+					break;
+				case '_updateVideosDetails':
+					_updateVideosDetails($service, $pdo, $htmlBody);
+					break;
+				case '_ajaxUpdateChannels':
+					_ajaxUpdateChannels($service, $pdo, $htmlBody);
+					break;
+				case '_listVideos':
+					_listVideos($service, $pdo, $table);
+					break;
+			}
 		}
 	} catch (Google_Service_Exception $e) {
 		$htmlBody .= sprintf('<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
@@ -183,11 +172,10 @@ function _updateSubscriptions($service, $pdo, &$htmlBody) {
 	}
 	
 	$sql = substr($sql, 0, -1).';';
-	echo $sql;
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
 	
-	$htmlBody .= print_r($arrMySubscriptions, true);
+	$htmlBody .= 'Upated subscriptions: ' . count($arrMySubscriptions) . '<br>';
 }
 
 function _listSubscriptions($service, $pdo, &$table) {
@@ -258,34 +246,6 @@ function _updateVideos($service, $pdo, &$htmlBody) {
 	$resVideos = $stmt->fetchAll();
 	
     $arrVideos = [];
-	/*$arrFilter = [
-		"clip officiel",
-		"making of",
-		"en live",
-		"\- live",
-		"bazar du grenier \- critique",
-		"ermite réagit",
-		"détatouage laser",
-		"détatouage laser", // autre écriture
-		"flander's company",
-		"l'épopée temporelle",
-		"wtfake academy",
-		"sans filtre #",
-		"parole de deporte",
-	];
-	$strFilter = '/('.implode('|', $arrFilter).')/i';*/
-	
-	/*
-	Live 
-	en live 
-
-	best of:
-	zerator
-	moman
-	gius
-	mistermv 
-	*/
-	
 	$arrStoredVideos = [];
 	
     foreach ($resVideos as $row) {
@@ -310,7 +270,6 @@ function _updateVideos($service, $pdo, &$htmlBody) {
         foreach ($rspPlaylistItems['items'] as $video) {
 			$arrVideos[$video->snippet->resourceId->videoId] = [
 				'channelTitle' => $video->snippet->channelTitle,
-				// 'title' => addslashes($video->snippet->title),
 				'title' => $video->snippet->title,
 				'videoId' => $video->snippet->resourceId->videoId,
 				'playlistId' => $row['playlist_id'],
@@ -415,7 +374,6 @@ function _updateVideosDetails($service, $pdo, &$htmlBody) {
 	if (count($arrVideos) !== 0) {
 		foreach ($arrVideos as $strVideoId => $arrVideo) {
 			$sql = "UPDATE videos SET my_playlist_id = \"{$arrVideo['my_playlist_id']}\" WHERE id = \"$strVideoId\";";
-			// var_dump($sql);
 			$stmt = $pdo->prepare($sql);
 			$stmt->execute();
 		}
@@ -428,7 +386,6 @@ function _updateVideosDetails($service, $pdo, &$htmlBody) {
 	if (count($arrVideos2) !== 0) {
 		foreach ($arrVideos2 as $strVideoId => $arrVideo) {
 			$sql = "UPDATE videos SET duration = \"{$arrVideo['duration']}\" WHERE id = \"$strVideoId\";";
-			// var_dump($sql);
 			$stmt = $pdo->prepare($sql);
 			$stmt->execute();
 		}
@@ -609,24 +566,18 @@ function _ajaxUpdateChannels($service, $pdo, &$htmlBody) {
 		<!-- Tablesorter: required -->
 		<script src="js/jquery-latest.min.js"></script>
 		<script src="js/jquery.tablesorter.min.js"></script>
-		<script src="js/widgets/widget-filter.min.js"></script>
-		<script src="js/widgets/widget-storage.js"></script>
+		<script src="js/jquery.tablesorter.widgets.min.js"></script>
 
 		<!-- Theme -->
 		<link rel="stylesheet" href="css/bootstrap-v3.min.css">
 		<link rel="stylesheet" href="css/theme.bootstrap.css">
-		<link rel="stylesheet" href="css/theme.blue.css">
 		<script src="js/bootstrap.min.js"></script>
-		
-		<!-- Grouping widget -->
-		<script src="js/parsers/parser-input-select.min.js"></script>
-		<script src="js/parsers/parser-date-weekday.min.js"></script>
-		<script src="js/widgets/widget-grouping.min.js"></script>
 		
 		<!-- Tablesorter: optional -->
 		<link rel="stylesheet" href="css/jquery.tablesorter.pager.min.css">
+		<script src="js/widgets/widget-filter.min.js"></script>
+		<script src="js/widgets/widget-storage.js"></script>
 		<script src="js/extras/jquery.tablesorter.pager.min.js"></script>
-		<!--<script src="js/jquery.tablesorter.widgets.min.js"></script>-->
 		
 		<!-- DRAG -->
 		<script src="js/jquery-ui.min.js"></script>
@@ -643,12 +594,16 @@ function _ajaxUpdateChannels($service, $pdo, &$htmlBody) {
 		<a href="?action=_listVideos">List Videos</a>
 		<br>
 		<?=$htmlBody?>
-		
-		<div class="group1">
-			<?
-			switch ($_GET['action']) {
-				case '_listSubscriptions':
-				case '_listVideos':
+		<?php
+		if (isset($_GET['action'])) {
+			$action = $_GET['action'];
+		} else {
+			$action = '';
+		}
+		?>
+		<div class="<?=$action?>">
+			<?php
+			if ($action == '_listSubscriptions' || $action == '_listVideos') {
 			?>
 			<div class="pager">
 				Page: <select class="gotoPage"></select>
@@ -664,14 +619,19 @@ function _ajaxUpdateChannels($service, $pdo, &$htmlBody) {
 					<option value="500">500</option>
 				</select> | 
 				<input type='checkbox' id='checkAll' /> Check All 
+				<?php
+				if ($action == '_listSubscriptions') {
+				?>
 				<button type="button" id="btnIgnore" class="download">Hide selected</button>
 				<button type="button" id="btnUnignore" class="download">Show selected</button>
 				<button type="button" id="btnSort" class="download">Save channel order</button>
+				<?php
+				}
+				?>
 				<span id='status'></span>
 			</div>
 			
-			<?
-				break;
+			<?php
 			}
 			?>
 			<?=$table?>
