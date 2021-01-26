@@ -29,6 +29,7 @@ $service = new Google_Service_YouTube($client);
 
 // Check if an auth token exists for the required scopes
 $tokenSessionKey = 'token-' . $client->prepareScopes();
+
 if (isset($_GET['code'])) {
   if (strval($_SESSION['state']) !== strval($_GET['state'])) {
     die('The session state did not match.');
@@ -55,12 +56,14 @@ try {
 
 $htmlBody = '';
 $tableBody = '';
+$table = '';
 
 // Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
 	try {
 		// _updateSubscriptions($service, $pdo, $htmlBody);
-		_listSubscriptions($service, $pdo, $tableBody);
+		// _listSubscriptions($service, $pdo, $table);
+		_updateVideos($service, $pdo, $htmlBody);
 	} catch (Google_Service_Exception $e) {
 		$htmlBody .= sprintf('<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
 		($e->getMessage()));
@@ -159,9 +162,7 @@ function _updateSubscriptions($service, $pdo, &$htmlBody) {
 	$htmlBody .= print_r($arrMySubscriptions, true);
 }
 
-
-function _listSubscriptions($service, $pdo, &$tableBody) {
-	
+function _listSubscriptions($service, $pdo, &$table) {
 	$sql = "SELECT * FROM channels";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
@@ -170,18 +171,138 @@ function _listSubscriptions($service, $pdo, &$tableBody) {
     $rows = array();
 	
     foreach ($result as $row) {
-        $cells = array();
-		
-        foreach ($row as $cell) {
-            $cells[] = "<td>{$cell}</td>";
-        }
-		
-        $rows[] = "<tr>" . implode('', $cells) . "</tr>";
+        // $rows[] = "<tr><td><input type='checkbox' checked=''></td><td><a href='https://www.youtube.com/channel/{$row['id']}' target='_blank'>{$row['name']}</a></td></tr>";
+		$rows[] = <<<END
+<tr>
+	<td><input type='checkbox'></td>
+	<td><a href='https://www.youtube.com/channel/{$row['id']}' target='_blank'>{$row['name']}</a></td>
+	<td><a href='https://www.youtube.com/playlist?list={$row['playlist_id']}' target='_blank'>{$row['name']}</a></td>
+	<td>{$row['date_last_upload']}</td>
+	<td>{$row['date_checked']}</td>
+</tr>
+END;
     }
 	
 	$tableBody = implode('', $rows);
+	$table = <<<END
+<table id="groups">
+	<thead>
+		<tr>
+			<th class="group-word"></th> <!-- checkbox status -->
+			<th class="group-letter-1">Channel</th>
+			<th class="group-letter-1">Uploads</th>
+			<th class="group-date-month">Last Upload</th>
+			<th class="group-date-month">Checked</th>
+		</tr>
+	</thead>
+	<tfoot>
+		<tr>
+			<th class="group-word"></th> <!-- checkbox status -->
+			<th class="group-letter-1">Channel</th>
+			<th class="group-letter-1">Uploads</th>
+			<th class="group-date-month">Last Upload</th>
+			<th class="group-date-month">Checked</th>
+		</tr>
+	</tfoot>
+	<tbody>
+		$tableBody
+	</tbody>
+</table>
+END;
 }
+
+function _updateVideos($service, $pdo, &$htmlBody) {
+	$sql = "SELECT playlist_id FROM channels";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+	$result = $stmt->fetchAll();
 	
+    $rows = array();
+	
+	$nbChannels = 0;
+    $arrVideos = [];
+	$arrFilter = [
+		"clip officiel",
+		"making of",
+		"en live",
+		"\- live",
+		"bazar du grenier \- critique",
+		"ermite réagit",
+		"détatouage laser",
+		"détatouage laser", // autre écriture
+		"flander's company",
+		"l'épopée temporelle",
+		"wtfake academy",
+		"sans filtre #",
+		"parole de deporte",
+	];
+	$strFilter = '/('.implode('|', $arrFilter).')/i';
+	
+	/*
+	Live 
+	en live 
+
+	best of:
+	zerator
+	moman
+	gius
+	mistermv 
+	*/
+	
+    foreach ($result as $row) {
+        $queryParams = [
+            'playlistId' => $row['playlist_id'],
+            'maxResults' => '50'
+        ];
+
+        $reslistPlaylistItems = $service->playlistItems->listPlaylistItems('snippet', $queryParams);
+		
+        foreach ($reslistPlaylistItems['items'] as $video) {
+            if (preg_match($strFilter, $video->snippet->title) !== 1) {
+                $arrVideos[$video->snippet->resourceId->videoId] = [
+                    'channelTitle' => $video->snippet->channelTitle,
+                    'title' => addslashes($video->snippet->title),
+                    'videoId' => $video->snippet->resourceId->videoId,
+                    'playlistId' => $row['playlist_id'],
+                    'publishedAt' => $video->snippet->publishedAt,
+                    'publishedMonth' => substr($video->snippet->publishedAt, 0, 7),
+                    'isRated' => 0,
+                    'isPlaylist' => 0,
+                    'duration' => '',
+                ];
+            }
+        }
+		
+		$nbChannels++;
+		
+		if ($nbChannels == 50) {
+			break;
+		}
+		
+		break;
+	}
+	
+	
+	$htmlBody .= print_r($arrVideos, true);
+		
+	$sql = "INSERT INTO videos (id, playlist_id, title, date_published, date_checked) VALUES";
+    $arrSqlVideos = [];
+	$now = date('Y-m-d');
+	
+	foreach ($arrVideos as $arrSqlVideosId => $strSqlVideos) {
+		$title = str_replace('"', '""', $strSqlVideos['title']);
+		$sql .= "(\"$arrSqlVideosId\", \"{$strSqlVideos['playlistId']}\", \"{$title}\", \"{$strSqlVideos['publishedAt']}\", \"$now\"),";
+	}
+	
+	$sql = substr($sql, 0, -1).';';
+	echo $sql;
+	// die;
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+	
+	$htmlBody .= print_r($arrSqlVideos, true);
+	
+}
 ?>
 
 <!doctype html>
@@ -198,7 +319,6 @@ function _listSubscriptions($service, $pdo, &$tableBody) {
 	<script src="js/widgets/widget-storage.js"></script>
 
 	<!-- Grouping widget -->
-	<!-- <link href="css/widget.group.css" rel="stylesheet"> -->
 	<script src="js/parsers/parser-input-select.min.js"></script>
 	<script src="js/parsers/parser-date-weekday.min.js"></script>
 	<script src="js/widgets/widget-grouping.min.js"></script>
@@ -208,53 +328,8 @@ function _listSubscriptions($service, $pdo, &$tableBody) {
 	<pre>
 		<?=$htmlBody?>
 	</pre>
-	<!--
-	<h1>Demo</h1>
 
-	<ul>
-		<li>Clicking on a sortable header cells will sort the column and group the rows based on the group setting.</li>
-		<li>Clicking on a group header will toggle the view of the content below it.</li>
-		<li>Using <kbd>Shift</kbd> plus Click on a group header will toggle the view of all groups in that table.</li>
-	</ul>
+	<?=$table?>
 
-	<span class="demo-label">Numeric column:</span> <div id="slider0"></div> <span class="numberclass"></span> (includes subtotals)<br>
-	<span class="demo-label">Animals column:</span> <div id="slider1"></div> <span class="animalclass"></span><br>
-	<span class="demo-label">Date column:</span> <div id="slider2"></div> <span class="dateclass"></span><sup class="results">&dagger;</sup>
-	<br><br>
-	<button type="button" class="group_reset">Reset Saved Collapsed Groups</button>
-	-->
-	<div id="demo">
-	<table id="groups">
-		<thead>
-			<tr>
-				<th class="group-word"></th> <!-- checkbox status -->
-				<th class="group-number">Quality (number)</th> <!-- notice this uses the same class name as the Numeric column, it's just left at 1 -->
-				<th class="group-number-10">Numeric (every <span>10</span>)</th>
-				<th class="group-letter-1">Priority (letter)</th>
-				<th class="group-letter-1">Animals (first <span>letter</span>)</th>
-				<th class="group-word-1">Natural Sort (first word)</th>
-				<th class="group-word-2">Inputs (second word)</th>
-				<!-- try "group-date", "group-date-year", "group-date-month", "group-data-monthyear", "group-date-day", "group-date-week" or "group-date-time" -->
-				<th class="group-date">Date (<span>Full</span>)</th>
-			</tr>
-		</thead>
-		<tfoot>
-			<tr>
-				<th></th>
-				<th>Quality</th>
-				<th>Numeric</th>
-				<th>Priority</th>
-				<th>Animals</th>
-				<th>Natural Sort</th>
-				<th>Inputs</th>
-				<th>Date</th>
-			</tr>
-		</tfoot>
-		<tbody>
-			<tr><td><input type="checkbox" checked=""></td><td>1</td><td>10</td><td><select><option selected="">A</option><option>B</option><option>C</option></select></td><td>Koala</td><td>abc 123</td><td><input type="text" value="item: truck"></td><td>1/13/2013 12:01 AM</td></tr>
-			<?=$tableBody?>
-		</tbody>
-	</table>
-	</div>
 </body>
 </html>
