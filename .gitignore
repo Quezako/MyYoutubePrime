@@ -8,3 +8,9 @@ vendor/
 config.php
 
 composer.lock
+
+*.sqlite
+
+TODO.txt
+
+*.db
