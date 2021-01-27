@@ -68,8 +68,8 @@ if ($client->getAccessToken()) {
 				case '_updateVideosDetails':
 					_updateVideosDetails($service, $pdo, $htmlBody);
 					break;
-				case '_ajaxUpdateChannels':
-					_ajaxUpdateChannels($service, $pdo, $htmlBody);
+				case '_ajaxUpdate':
+					_ajaxUpdate($service, $pdo, $htmlBody);
 					break;
 				case '_listVideos':
 					_listVideos($service, $pdo, $table);
@@ -179,7 +179,7 @@ function _updateSubscriptions($service, $pdo, &$htmlBody) {
 }
 
 function _listSubscriptions($service, $pdo, &$table) {
-	$sql = "SELECT * FROM channels ORDER BY sort ASC";
+	$sql = "SELECT * FROM channels ORDER BY sort ASC LIMIT 200";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
 	$resChannels = $stmt->fetchAll();
@@ -214,17 +214,6 @@ END;
 			<th class="group-date-month">Sort</th>
 		</tr>
 	</thead>
-	<tfoot>
-		<tr>
-			<th class="group-word">Action</th>
-			<th class="group-letter-1">Channel</th>
-			<th class="group-letter-1">Uploads</th>
-			<th class="group-date-month">Last Upload</th>
-			<th class="group-date-month">Checked</th>
-			<th class="group-date-month">Status</th>
-			<th class="group-date-month">Sort</th>
-		</tr>
-	</tfoot>
 	<tbody>
 		$tableBody
 	</tbody>
@@ -453,7 +442,7 @@ channels.name AS channel_name, channels.id AS channel_id, channels.sort AS chann
 FROM videos 
 LEFT JOIN playlists ON videos.my_playlist_id = playlists.id
 INNER JOIN channels ON videos.playlist_id = channels.playlist_id
-WHERE videos.my_playlist_id = 0 AND channels.status > 0
+WHERE videos.my_playlist_id = 0 AND channels.status > 0 AND (videos.status <> -2 OR videos.status IS NULL)
 ORDER BY SUBSTR(videos.date_published, 0, 8) DESC, channel_sort, CAST(duration AS INT) ASC, channel_sort ASC
 LIMIT 1000
 END;
@@ -505,18 +494,6 @@ END;
 			<th class="group-word">Status</th>
 		</tr>
 	</thead>
-	<tfoot>
-		<tr>
-			<th class="group-word">Action</th>
-			<th class="group-letter-1">Channel</th>
-			<th class="group-letter-1">Video</th>
-			<th class="group-Number-1">Duration</th>
-			<th class="group-Number-1">Priority</th>
-			<th class="group-date-month">Published</th>
-			<th class="group-date-month">Pub Month</th>
-			<th class="group-word">Status</th>
-		</tr>
-	</tfoot>
 	<tbody>
 		$tableBody
 	</tbody>
@@ -524,32 +501,33 @@ END;
 END;
 }
 
-function _ajaxUpdateChannels($service, $pdo, &$htmlBody) {
+function _ajaxUpdate($service, $pdo, &$htmlBody) {
 	if (!isset($_POST['data'])) {
 		echo 'No POST data.';
 	} else {
-		$strStatus = $_POST['data'][0] == 'btnIgnore' ? -2 : 1;
+		$strStatus = $_POST['data'][1] == 'btnIgnore' ? -2 : 1;
+		$strTable = $_POST['data'][0] == '_listVideos' ? 'videos' : 'channels';
 		
 		foreach($_POST['data'][2] as $key => $isChecked) {
-			if ($_POST['data'][0] == 'btnSort') {
+			if ($_POST['data'][1] == 'btnSort') {
 				$strSort = $key + 1;
 				
-				$sql = "UPDATE channels SET sort=\"{$strSort}\" WHERE id = \"{$_POST['data'][1][$key]}\";";
+				$sql = "UPDATE $strTable SET sort=\"{$strSort}\" WHERE id = \"{$_POST['data'][3][$key]}\";";
 				$stmt = $pdo->prepare($sql);
 				$stmt->execute();
 			} else {
 				if ($isChecked == 1) {
-					$sql = "UPDATE channels SET status=\"$strStatus\" WHERE id = \"{$_POST['data'][1][$key]}\";";
+					$sql = "UPDATE $strTable SET status=\"$strStatus\" WHERE id = \"{$_POST['data'][3][$key]}\";";
 					$stmt = $pdo->prepare($sql);
 					$stmt->execute();
 				}
 			}
 		}
 		
-		if ($strStatus == 'btSort') {
-			$htmlBody .= 'Upated Channels Order.<br>';
+		if ($_POST['data'][1] == 'btSort') {
+			$htmlBody .= "Upated $strTable Order.<br>";
 		} else {
-			$htmlBody .= 'Upated Channels Status.<br>';
+			$htmlBody .= "Upated $strTable Status.<br>";
 		}
 		
 		echo $htmlBody;
@@ -619,11 +597,11 @@ function _ajaxUpdateChannels($service, $pdo, &$htmlBody) {
 					<option value="500">500</option>
 				</select> | 
 				<input type='checkbox' id='checkAll' /> Check All 
+				<button type="button" id="btnIgnore" class="download">Hide selected</button>
+				<button type="button" id="btnUnignore" class="download">Show selected</button>
 				<?php
 				if ($action == '_listSubscriptions') {
 				?>
-				<button type="button" id="btnIgnore" class="download">Hide selected</button>
-				<button type="button" id="btnUnignore" class="download">Show selected</button>
 				<button type="button" id="btnSort" class="download">Save channel order</button>
 				<?php
 				}
