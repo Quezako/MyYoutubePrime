@@ -25,18 +25,17 @@ $(function() {
 	
 	$('._listSubscriptions table').sortable({ items: "tbody tr" });
 
-    $('#btnIgnore, #btnUnignore').click(function() {
-		var arrChannel = [];
-		var arrVideo = [];
+    $('#btnIgnore, #btnUnignore, #btnSort, #btnPlaylist').click(function() {
+		var arrId = [];
 		var arrChecked = [];
 		var action = getUrlParameter('action');
 		var strCol = (action == '_listVideos') ? '3' : '2';
 
  		$('.odd, .even').each(function() {
 			strHref = $(this).find('td:nth-child(' + strCol + ')').find('a').attr('href');
-			strChannel = strHref.split(/[\/ ]+/).pop();
-			strChannel = strChannel.split(/[\= ]+/).pop();
-			arrChannel.push(strChannel);
+			strId = strHref.split(/[\/ ]+/).pop();
+			strId = strId.split(/[\= ]+/).pop();
+			arrId.push(strId);
 		});
 
 		$("tbody input[type='checkbox']").each(function() {
@@ -48,7 +47,7 @@ $(function() {
 			action,
 			this.id,
 			arrChecked,
-			arrChannel
+			arrId
 		];
 
 		$.ajax({
@@ -64,41 +63,6 @@ $(function() {
 	
 	$('#checkAll').click(function(){
 		$('tbody tr:visible input:checkbox').not(this).prop('checked', this.checked);
-	});
-	
-    $('#btnSort').click(function() {
-		var arrChannel = [];
-		var arrChecked = [];
-		var action = getUrlParameter('action');
-
-		$('.odd, .even').each(function() {
-			strHref = $(this).find('td').find('a').attr('href');
-			strChannel = strHref.substring(strHref.lastIndexOf('/'));
-			strChannel = strHref.split(/[\/ ]+/).pop();
-			arrChannel.push(strChannel);
-		});
-
-		$("tbody input[type='checkbox']").each(function() {
-			strChecked = ($(this).is(':checked') == true) ? 1 : 0;
-			arrChecked.push(strChecked);
-		});
-
-		arrOutput = [
-			action,
-			this.id,
-			arrChecked,
-			arrChannel
-		];
-
-		$.ajax({
-			type: "POST",
-			data: {data:arrOutput},
-			url: "my-prime.php?action=_ajaxUpdate",
-			success: function(data) {
-				console.log(data);
-				$('#status').html(data);
-			}
-		});
 	});
 
 	var getUrlParameter = function getUrlParameter(sParam) {

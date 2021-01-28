@@ -508,24 +508,51 @@ function _ajaxUpdate($service, $pdo, &$htmlBody) {
 		$strStatus = $_POST['data'][1] == 'btnIgnore' ? -2 : 1;
 		$strTable = $_POST['data'][0] == '_listVideos' ? 'videos' : 'channels';
 		
+		// Define the $playlistItem object, which will be uploaded as the request body.
+		$playlistItem = new Google_Service_YouTube_PlaylistItem();
+
+		// Add 'snippet' object to the $playlistItem object.
+		$playlistItemSnippet = new Google_Service_YouTube_PlaylistItemSnippet();
+		$playlistItemSnippet->setPlaylistId('PL52YqI0PbEYU1_3bne33bXQYAviFN8AD4');
+		// $playlistItemSnippet->setPosition(0);
+		$resourceId = new Google_Service_YouTube_ResourceId();
+		$resourceId->setKind('youtube#video');
+		$arrVideoId = [];
+		
 		foreach($_POST['data'][2] as $key => $isChecked) {
 			if ($_POST['data'][1] == 'btnSort') {
 				$strSort = $key + 1;
-				
 				$sql = "UPDATE $strTable SET sort=\"{$strSort}\" WHERE id = \"{$_POST['data'][3][$key]}\";";
+				// var_dump($sql);
 				$stmt = $pdo->prepare($sql);
 				$stmt->execute();
-			} else {
-				if ($isChecked == 1) {
+			} elseif ($isChecked == 1) {
+				if ($_POST['data'][1] == 'btnPlaylist') {
+					$arrVideoId[] = $_POST['data'][3][$key];
+				} else {
 					$sql = "UPDATE $strTable SET status=\"$strStatus\" WHERE id = \"{$_POST['data'][3][$key]}\";";
+					// var_dump($sql);
 					$stmt = $pdo->prepare($sql);
 					$stmt->execute();
 				}
 			}
 		}
 		
-		if ($_POST['data'][1] == 'btSort') {
+		$arrReversedVideoId = array_reverse($arrVideoId);
+		
+		foreach ($arrReversedVideoId as $videoId) {
+			$resourceId->setVideoId($videoId);
+			$playlistItemSnippet->setResourceId($resourceId);
+			$playlistItem->setSnippet($playlistItemSnippet);
+
+			$response = $service->playlistItems->insert('snippet', $playlistItem);
+		}
+		
+		
+		if ($_POST['data'][1] == 'btnSort') {
 			$htmlBody .= "Upated $strTable Order.<br>";
+		} elseif (count($arrVideoId) > 0) {
+			$htmlBody .= "Inserted " . count($arrVideoId) . " videos into playlist.<br>";
 		} else {
 			$htmlBody .= "Upated $strTable Status.<br>";
 		}
@@ -603,6 +630,10 @@ function _ajaxUpdate($service, $pdo, &$htmlBody) {
 				if ($action == '_listSubscriptions') {
 				?>
 				<button type="button" id="btnSort" class="download">Save channel order</button>
+				<?php
+				} elseif ($action == '_listVideos') {
+				?>
+				<button type="button" id="btnPlaylist" class="download">Save checked to playlist</button>
 				<?php
 				}
 				?>
