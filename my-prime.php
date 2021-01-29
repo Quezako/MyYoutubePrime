@@ -1,8 +1,8 @@
 <?php
 error_reporting(E_ALL);
 ini_set("display_errors", 1);
-ini_set('max_execution_time', 600); //300 seconds = 5 minutes
-set_time_limit(600);
+ini_set('max_execution_time', 300); //300 seconds = 5 minutes
+set_time_limit(300);
 
 if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
   throw new \Exception('please run "composer require google/apiclient:~2.0" in "' . __DIR__ .'"');
@@ -27,6 +27,7 @@ $tokenSessionKey = 'token-' . $client->prepareScopes();
 $htmlBody = '';
 $htmlTable = '';
 $htmlSelect = '';
+$myChannelId = '';
 
 if (isset($_GET['code'])) {
   if (strval($_SESSION['state']) !== strval($_GET['state'])) {
@@ -55,37 +56,9 @@ try {
 // Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
 	try {
-		if (isset($_GET['action'])) {
-			switch ($_GET['action']) {
-				case '_updateSubscriptions':
-					_updateSubscriptions($service, $pdo, $htmlBody);
-					break;
-				case '_listSubscriptions':
-					_listSubscriptions($service, $pdo, $htmlTable);
-					break;
-				case '_updateVideos':
-					_updateVideos($service, $pdo, $htmlBody);
-					break;
-				case '_updateVideosDetails':
-					_updateVideosDetails($service, $pdo, $htmlBody);
-					break;
-				case '_updatePlaylists':
-					_updatePlaylists($service, $pdo, $htmlBody);
-					break;
-				case '_updatePlaylistsDetails':
-					_updatePlaylistsDetails($service, $pdo, $htmlBody);
-					break;
-				case '_listPlaylists':
-					_listPlaylists($service, $pdo, $htmlTable);
-					break;
-				case '_ajaxUpdate':
-					_ajaxUpdate($service, $pdo, $htmlBody);
-					break;
-				case '_listVideos':
-					_listVideos($service, $pdo, $htmlTable, $htmlSelect);
-					break;
-			}
-		}
+		$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
+		// $myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
+		_getMyChannelId($service, $myChannelId);
 	} catch (Google_Service_Exception $e) {
 		$htmlBody .= sprintf('<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
 		($e->getMessage()));
@@ -100,7 +73,39 @@ if ($client->getAccessToken()) {
 		$htmlBody .= sprintf('<p>An Exception error occurred: <code>%s</code></p>',
 		($e->getMessage()));
 	}
-  
+
+	if (isset($_GET['action'])) {
+		switch ($_GET['action']) {
+			case '_listSubscriptions':
+				_listSubscriptions($service, $pdo, $htmlTable, $myChannelId);
+				break;
+			case '_listPlaylists':
+				_listPlaylists($service, $pdo, $htmlTable, $myChannelId);
+				break;
+			case '_listVideos':
+				_listVideos($service, $pdo, $htmlTable, $htmlSelect, $myChannelId);
+				break;
+			case '_updateSubscriptions':
+				_updateSubscriptions($service, $pdo, $htmlBody, $myChannelId);
+				break;
+			case '_updateVideos':
+				_updateVideos($service, $pdo, $htmlBody, $myChannelId);
+				break;
+			case '_updateVideosDetails':
+				_updateVideosDetails($service, $pdo, $htmlBody, $myChannelId);
+				break;
+			case '_updatePlaylists':
+				_updatePlaylists($service, $pdo, $htmlBody, $myChannelId);
+				break;
+			case '_updatePlaylistsDetails':
+				_updatePlaylistsDetails($service, $pdo, $htmlBody, $myChannelId);
+				break;
+			case '_ajaxUpdate':
+				_ajaxUpdate($service, $pdo, $htmlBody);
+				break;
+		}
+	}
+		
 	$_SESSION[$tokenSessionKey] = $client->getAccessToken();
 } elseif ($OAUTH2_CLIENT_ID == 'REPLACE_ME') {
 	$htmlBody .= <<<END
@@ -113,6 +118,7 @@ END;
 } else {
 	_showAuth($client, $htmlBody);
 }
+
 
 function _showAuth($client, &$htmlBody) {
 	// If the user hasn't authorized the app, initiate the OAuth flow
@@ -139,57 +145,18 @@ function _covtime($youtube_time) {
     return $youtube_time;
 }
 
-function _updateSubscriptions($service, $pdo, &$htmlBody) {
-	$pageToken = '';
-    $arrMySubscriptions = [];
-	
-	while (!is_null($pageToken)) {
-		$arrTmpSubscriptions = [];
-		$paramMySubscriptions = [
-			'maxResults' => 50,
-			'pageToken' => $pageToken,
-			'mine' => true,
-			'fields' => 'items.snippet.title,items.snippet.resourceId.channelId,nextPageToken'
-		];
-		
-		$rspMySubscriptions = $service->subscriptions->listSubscriptions('snippet', $paramMySubscriptions);
-		$pageToken = $rspMySubscriptions->nextPageToken;
-		
-		foreach ($rspMySubscriptions->items as $subscription) {
-			$arrTmpSubscriptions[$subscription->snippet->resourceId->channelId]['title'] = $subscription->snippet->title;
-		}
-	
-		$strSubs = implode(",", array_keys($arrTmpSubscriptions));
+function _getMyChannelId($service, &$myChannelId) {
+	$queryParams = [
+		'mine' => true
+	];
 
-		$paramChannels = [
-		   'id' => $strSubs,
-		   'fields' => 'items.id,items.contentDetails.relatedPlaylists.uploads',
-		];
-
-		$rspChannels = $service->channels->listChannels('contentDetails', $paramChannels);
-		
-		foreach ($rspChannels->items as $channel) {
-			$arrTmpSubscriptions[$channel->id]['uploads'] = $channel->contentDetails->relatedPlaylists->uploads;
-		}
-		
-		$arrMySubscriptions += $arrTmpSubscriptions;
-	}
-	
-	$sql = "INSERT OR IGNORE INTO channels (id, name, playlist_id) VALUES";
-	
-	foreach ($arrMySubscriptions as $mySubscriptionId => $mySubscription) {
-		$sql .= "(\"$mySubscriptionId\", \"{$mySubscription['title']}\", \"{$mySubscription['uploads']}\"),";
-	}
-	
-	$sql = substr($sql, 0, -1).';';
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-	
-	$htmlBody .= 'Upated subscriptions: ' . count($arrMySubscriptions) . '<br>';
+	$rspMyChannel = $service->channels->listChannels('id', $queryParams);
+	$myChannelId = $rspMyChannel[0]->id;
 }
 
-function _listSubscriptions($service, $pdo, &$htmlTable) {
-	$sql = "SELECT * FROM channels ORDER BY sort ASC LIMIT 200";
+function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId) {
+	$sql = "SELECT * FROM channels WHERE my_channel_id = '$myChannelId' ORDER BY sort ASC LIMIT 200";
+	// var_dump($sql);
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
 	$resChannels = $stmt->fetchAll();
@@ -231,88 +198,8 @@ END;
 END;
 }
 
-function _updatePlaylists($service, $pdo, &$htmlBody) {
-	$pageToken = '';
-    $arrMyPlaylists = [];
-	
-	while (!is_null($pageToken)) {
-		$paramMyPlaylists = [
-			'maxResults' => 50,
-			'pageToken' => $pageToken,
-			'mine' => true,
-			'fields' => 'items.id,items.snippet.title,items.snippet.channelId,nextPageToken'
-		];
-		
-		$rspMyPlaylists = $service->playlists->listPlaylists('snippet', $paramMyPlaylists);
-		$pageToken = $rspMyPlaylists->nextPageToken;
-		var_dump($rspMyPlaylists[0]->snippet);
-		
-		
-		foreach ($rspMyPlaylists->items as $playlist) {
-			$arrMyPlaylists[$playlist->id] = [
-				'title' => $playlist->snippet->title,
-				'channel' => $playlist->snippet->channelId,
-			];
-		}
-	}
-	
-	$sql = "INSERT OR IGNORE INTO playlists (id, name, channel_id) VALUES";
-	
-	foreach ($arrMyPlaylists as $myPlaylistId => $myPlaylist) {
-		$sql .= "(\"$myPlaylistId\", \"{$myPlaylist['title']}\", \"{$myPlaylist['channel']}\"),";
-	}
-	
-	$sql = substr($sql, 0, -1).';';
-	// var_dump($sql);
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-	
-	$htmlBody .= 'Upated playlists: ' . count($arrMyPlaylists) . '<br>';
-}
-
-function _updatePlaylistsDetails($service, $pdo, &$htmlBody) {
-	$arrVideos = [];
-	
-	$sql = "SELECT id FROM playlists WHERE channel_id = 'UCDhEgLlKq6teYnMOUS3MZ_g' AND status > 0 ORDER BY sort ASC LIMIT 200;";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-	$resPlaylists = $stmt->fetchAll();
-
-    foreach ($resPlaylists as $myPlaylist) {
-        $pageToken = "";
-
-        while (!is_null($pageToken)) {
-            $queryParams = [
-                'maxResults' => 50,
-                'pageToken' => $pageToken,
-                'playlistId' => $myPlaylist['id']
-            ];
-            
-            $myPlaylistItems = $service->playlistItems->listPlaylistItems('contentDetails', $queryParams);
-            $pageToken = $myPlaylistItems->nextPageToken;
-			
-			foreach ($myPlaylistItems as $myPlaylistItemDetails) {
-				$arrVideos[$myPlaylistItemDetails->contentDetails->videoId]['my_playlist_id'] = $myPlaylist['id'];
-			}
-        }
-    }
-	
-	if (count($arrVideos) !== 0) {
-		foreach ($arrVideos as $strVideoId => $strPlaylistId) {
-			$sql = "INSERT INTO videos (id, my_playlist_id) VALUES (\"{$strVideoId}\", \"{$strPlaylistId['my_playlist_id']}\")";
-			$sql .= " ON CONFLICT(id) DO UPDATE SET my_playlist_id=\"{$strPlaylistId['my_playlist_id']}\" WHERE id=\"$strVideoId\";";
-			$stmt = $pdo->prepare($sql);
-			$stmt->execute();
-		}
-		
-		$htmlBody .= 'Upated videos playlists: ' . count($arrVideos) . '<br>';
-	} else {
-		$htmlBody .= 'Videos playlists up to date.<br>';
-	}
-}
-
-function _listPlaylists($service, $pdo, &$htmlTable) {
-	$sql = "SELECT * FROM playlists ORDER BY sort ASC LIMIT 200";
+function _listPlaylists($service, $pdo, &$htmlTable, $myChannelId) {
+	$sql = "SELECT * FROM playlists WHERE my_channel_id = '$myChannelId' ORDER BY sort ASC LIMIT 200";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
 	$resChannels = $stmt->fetchAll();
@@ -348,183 +235,21 @@ END;
 END;
 }
 
-function _updateVideos($service, $pdo, &$htmlBody) {
-	$now = date_create();
-	
-	$sql = "SELECT playlist_id FROM channels WHERE status=1;";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-	$resChannels = $stmt->fetchAll();
-	
-	$sql = "SELECT * FROM (SELECT playlist_id, date_checked FROM videos ORDER BY date_checked DESC) GROUP BY playlist_id";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-	$resVideos = $stmt->fetchAll();
-	
-    $arrVideos = [];
-	$arrStoredVideos = [];
-	
-    foreach ($resVideos as $row) {
-        $arrStoredVideos[$row['playlist_id']] = $row['date_checked'];
-	}
-	
-    foreach ($resChannels as $row) {
-		if (isset($arrStoredVideos[$row['playlist_id']])) {
-			$interval = date_diff(date_create($arrStoredVideos[$row['playlist_id']]), $now);
-			$dateDiff = $interval->format('%a') > 50 ? 50 : $interval->format('%a') + 1;
-		} else {
-			$dateDiff = 50;
-		}
-		
-        $queryParams = [
-            'playlistId' => $row['playlist_id'],
-            'maxResults' => $dateDiff
-        ];
-
-        $rspPlaylistItems = $service->playlistItems->listPlaylistItems('snippet', $queryParams);
-		
-        foreach ($rspPlaylistItems['items'] as $video) {
-			$arrVideos[$video->snippet->resourceId->videoId] = [
-				'channelTitle' => $video->snippet->channelTitle,
-				'title' => $video->snippet->title,
-				'videoId' => $video->snippet->resourceId->videoId,
-				'playlistId' => $row['playlist_id'],
-				'publishedAt' => $video->snippet->publishedAt,
-			];
-        }
-	}
-	
-	if (count($arrVideos) !== 0) {
-		$sql = "INSERT OR IGNORE INTO videos (id, playlist_id, title, date_published, date_checked) VALUES";
-		
-		foreach ($arrVideos as $arrSqlVideosId => $strSqlVideos) {
-			$title = str_replace('"', '""', $strSqlVideos['title']);
-			$sql .= "(\"$arrSqlVideosId\", \"{$strSqlVideos['playlistId']}\", \"{$title}\", \"{$strSqlVideos['publishedAt']}\", \"{$now->format('Y-m-d\TH:i:s\Z')}\"),";
-		}
-		
-		$sql = substr($sql, 0, -1).';';
-		$stmt = $pdo->prepare($sql);
-		$stmt->execute();
-		
-		$htmlBody .= 'Added videos: ' . count($arrVideos);
-	} else {
-		$htmlBody .= 'Videos up to date.';
-	}
-}
-
-function _updateVideosDetails($service, $pdo, &$htmlBody) {
-	// Check if user has rated the videos.
-    $arrVideos = [];
-	$arrVideoIds = [];
-    $strVideos = '';
-    $i = 0;
-	
-	$sql = "SELECT id FROM videos WHERE my_playlist_id = 0;";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-	$resVideos = $stmt->fetchAll();
-	
-    foreach ($resVideos as $row) {
-        $strVideos .= $row['id'] . ',';
-        $i++;
-
-        if ($i == 49) {
-            $arrVideoIds[] = $strVideos;
-            $strVideos = '';
-            $i = 0;
-        }
-    }
-
-    $arrVideoIds[] = $strVideos;
-
-    foreach ($arrVideoIds as $strVideos) {
-        $rspRatings = $service->videos->getRating($strVideos);
-
-        foreach ($rspRatings->items as $rating) {
-            if ($rating->rating == 'none') {
-                $arrVideos[$rating->videoId]['my_playlist_id'] = 0;
-            } elseif ($rating->rating == 'like') {
-                $arrVideos[$rating->videoId]['my_playlist_id'] = 1;
-            } elseif ($rating->rating == 'dislike') {
-                $arrVideos[$rating->videoId]['my_playlist_id'] = -1;
-            }
-        }
-    }
-	
-	// Check if in one of user's playlists.
-    $arrVideos2 = [];
-	$arrVideoIds = [];
-    $strVideos = '';
-    $i = 0;
-	
-	$sql = "SELECT id FROM videos WHERE duration IS NULL LIMIT 1000;";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-	$resVideos = $stmt->fetchAll();
-	
-    foreach ($resVideos as $row) {
-        $strVideos .= $row['id'] . ',';
-        $i++;
-
-        if ($i == 49) {
-            $arrVideoIds[] = $strVideos;
-            $strVideos = '';
-            $i = 0;
-        }
-    }
-
-    $arrVideoIds[] = $strVideos;
-	
-    foreach ($arrVideoIds as $strVideos) {
-        $queryParams = [
-            'id' => $strVideos
-        ];
-
-        $rspVideos = $service->videos->listVideos('contentDetails', $queryParams);
-		
-        foreach ($rspVideos->items as $video) {
-            $arrVideos2[$video->id]['duration'] = _covtime($video->contentDetails->duration);
-        }
-    }
-	
-	if (count($arrVideos) !== 0) {
-		foreach ($arrVideos as $strVideoId => $arrVideo) {
-			$sql = "UPDATE videos SET my_playlist_id = \"{$arrVideo['my_playlist_id']}\" WHERE id = \"$strVideoId\";";
-			$stmt = $pdo->prepare($sql);
-			$stmt->execute();
-		}
-		
-		$htmlBody .= 'Upated videos ratings: ' . count($arrVideos) . '<br>';
-	} else {
-		$htmlBody .= 'Videos ratings up to date.<br>';
-	}
-	
-	if (count($arrVideos2) !== 0) {
-		foreach ($arrVideos2 as $strVideoId => $arrVideo) {
-			$sql = "UPDATE videos SET duration = \"{$arrVideo['duration']}\" WHERE id = \"$strVideoId\";";
-			$stmt = $pdo->prepare($sql);
-			$stmt->execute();
-		}
-		
-		$htmlBody .= 'Upated videos duration: ' . count($arrVideos2) . '<br>';
-	} else {
-		$htmlBody .= 'Videos duration up to date.<br>';
-	}
-}
-
-function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect) {
+function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId) {
 	$sql = <<<END
-SELECT videos.*, 
-SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
-playlists.name AS my_playlist_name,
-channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
+SELECT 
+	videos.*, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
+	playlists.name AS my_playlist_name, channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
 FROM videos 
-LEFT JOIN playlists ON videos.my_playlist_id = playlists.id
-INNER JOIN channels ON videos.playlist_id = channels.playlist_id
-WHERE videos.my_playlist_id = 0 AND channels.status > 0 AND (videos.status <> -2 OR videos.status IS NULL)
-ORDER BY SUBSTR(videos.date_published, 0, 8) DESC, channel_sort, CAST(duration AS INT) ASC, channel_sort ASC
-LIMIT 1000
+LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.my_channel_id = '$myChannelId'
+INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.my_channel_id = '$myChannelId'
+WHERE channels.status > 0 
+	AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL) 
+	AND (videos.status <> -2 OR videos.status IS NULL)
+ORDER BY SUBSTR(videos.date_published, 0, 8) DESC, channel_sort ASC, CAST(duration AS INT) ASC
+LIMIT 1000;
 END;
+	// echo("<pre>$sql</pre>");
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
 	$resChannels = $stmt->fetchAll();
@@ -580,16 +305,353 @@ END;
 END;
 
 	// select list: playlists.
-	$sql = "SELECT id, name FROM playlists WHERE channel_id = 'UCDhEgLlKq6teYnMOUS3MZ_g' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+	$sql = "SELECT id, name FROM playlists WHERE my_channel_id = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
 	$resChannels = $stmt->fetchAll();
 
 	$htmlSelect = '<select name="selPlaylist" id="selPlaylist">';
+	
 	foreach ($resChannels as $row) {
 		$htmlSelect .= "<option value='{$row["id"]}'>{$row["name"]}</option>";
 	}
+	
 	$htmlSelect .= '</select>';
+}
+
+function _updateSubscriptions($service, $pdo, &$htmlBody, $myChannelId) {
+	$pageToken = '';
+    $arrMySubscriptions = [];
+	
+	while (!is_null($pageToken)) {
+		$arrTmpSubscriptions = [];
+		$paramMySubscriptions = [
+			'maxResults' => 50,
+			'pageToken' => $pageToken,
+			'mine' => true,
+			'fields' => 'items.snippet.title,items.snippet.resourceId.channelId,nextPageToken'
+		];
+		
+		$rspMySubscriptions = $service->subscriptions->listSubscriptions('snippet', $paramMySubscriptions);
+		$pageToken = $rspMySubscriptions->nextPageToken;
+		
+		foreach ($rspMySubscriptions->items as $subscription) {
+			$arrTmpSubscriptions[$subscription->snippet->resourceId->channelId]['title'] = $subscription->snippet->title;
+		}
+	
+		$strSubs = implode(",", array_keys($arrTmpSubscriptions));
+
+		$paramChannels = [
+		   'id' => $strSubs,
+		   'fields' => 'items.id,items.contentDetails.relatedPlaylists.uploads',
+		];
+
+		$rspChannels = $service->channels->listChannels('contentDetails', $paramChannels);
+		
+		foreach ($rspChannels->items as $channel) {
+			$arrTmpSubscriptions[$channel->id]['uploads'] = $channel->contentDetails->relatedPlaylists->uploads;
+		}
+		
+		$arrMySubscriptions += $arrTmpSubscriptions;
+	}
+	
+	foreach ($arrMySubscriptions as $mySubscriptionId => $mySubscription) {
+		$sql = <<<END
+INSERT INTO channels (id, name, playlist_id, my_channel_id) 
+VALUES ("$mySubscriptionId", "{$mySubscription['title']}", "{$mySubscription['uploads']}", "$myChannelId")
+ON CONFLICT(id) DO UPDATE SET 
+name = "{$mySubscription['title']}",
+playlist_id = "{$mySubscription['uploads']}",
+my_channel_id = "$myChannelId"
+WHERE id="$mySubscriptionId";
+END;
+		$stmt = $pdo->prepare($sql);
+		$stmt->execute();
+	}
+	
+	$htmlBody .= 'Upated subscriptions: ' . count($arrMySubscriptions) . '<br>';
+}
+
+function _updatePlaylists($service, $pdo, &$htmlBody, $myChannelId) {
+	$pageToken = '';
+    $arrMyPlaylists = [];
+	
+	while (!is_null($pageToken)) {
+		$paramMyPlaylists = [
+			'maxResults' => 50,
+			'pageToken' => $pageToken,
+			'mine' => true,
+			'fields' => 'items.id,items.snippet.title,items.snippet.channelId,nextPageToken'
+		];
+		
+		$rspMyPlaylists = $service->playlists->listPlaylists('snippet', $paramMyPlaylists);
+		$pageToken = $rspMyPlaylists->nextPageToken;
+		// var_dump($rspMyPlaylists[0]->snippet);
+		
+		
+		foreach ($rspMyPlaylists->items as $playlist) {
+			$arrMyPlaylists[$playlist->id] = [
+				'title' => $playlist->snippet->title,
+				'channel' => $playlist->snippet->channelId,
+			];
+		}
+	}
+	
+	foreach ($arrMyPlaylists as $myPlaylistId => $myPlaylist) {
+		$sql = <<<END
+INSERT OR IGNORE INTO playlists (id, name, my_channel_id) 
+VALUES ("$myPlaylistId", "{$myPlaylist['title']}", "{$myPlaylist['channel']}")
+ON CONFLICT(id) DO 
+UPDATE SET
+name = "{$myPlaylist['title']}",
+my_channel_id = "{$myPlaylist['channel']}"
+WHERE id="$myPlaylistId";
+END;
+		$stmt = $pdo->prepare($sql);
+		$stmt->execute();
+	}
+	
+	$htmlBody .= 'Upated playlists: ' . count($arrMyPlaylists) . '<br>';
+}
+
+function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId) {
+	$arrVideos = [];
+	
+	$sql = "SELECT id FROM playlists WHERE my_channel_id = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+	// var_dump($sql);
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+	$resPlaylists = $stmt->fetchAll();
+
+    foreach ($resPlaylists as $myPlaylist) {
+        $pageToken = "";
+
+        while (!is_null($pageToken)) {
+            $queryParams = [
+                'maxResults' => 50,
+                'pageToken' => $pageToken,
+                'playlistId' => $myPlaylist['id']
+            ];
+            
+            $myPlaylistItems = $service->playlistItems->listPlaylistItems('contentDetails', $queryParams);
+            $pageToken = $myPlaylistItems->nextPageToken;
+			
+			foreach ($myPlaylistItems as $myPlaylistItemDetails) {
+				$arrVideos[$myPlaylistItemDetails->contentDetails->videoId]['my_playlist_id'] = $myPlaylist['id'];
+			}
+        }
+    }
+	
+	if (count($arrVideos) !== 0) {
+		foreach ($arrVideos as $strVideoId => $strPlaylistId) {
+			$sql = <<<END
+INSERT INTO videos (id, my_playlist_id) 
+VALUES ("{$strVideoId}", "{$strPlaylistId['my_playlist_id']}")
+ON CONFLICT(id) DO 
+UPDATE SET my_playlist_id="{$strPlaylistId['my_playlist_id']}" 
+WHERE id="$strVideoId";
+END;
+			$stmt = $pdo->prepare($sql);
+			$stmt->execute();
+		}
+		
+		$htmlBody .= 'Upated videos playlists: ' . count($arrVideos) . '<br>';
+	} else {
+		$htmlBody .= 'Videos playlists up to date.<br>';
+	}
+}
+
+function _updateVideos($service, $pdo, &$htmlBody, $myChannelId) {
+	$now = date_create();
+	
+	$sql = "SELECT playlist_id FROM channels WHERE my_channel_id = '$myChannelId' AND status = 1;";
+	// var_dump($sql);
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+	$resChannels = $stmt->fetchAll();
+	
+	$sql = <<<END
+SELECT * FROM (
+	SELECT playlist_id, date_checked 
+	FROM videos
+	INNER JOIN playlists ON playlists.id = videos.my_playlist_id AND playlists.my_channel_id = '$myChannelId' 
+	ORDER BY date_checked DESC
+) GROUP BY playlist_id;
+END;
+	// var_dump($sql);
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+	$resVideos = $stmt->fetchAll();
+	
+    $arrVideos = [];
+	$arrStoredVideos = [];
+	
+    foreach ($resVideos as $row) {
+        $arrStoredVideos[$row['playlist_id']] = $row['date_checked'];
+	}
+	
+    foreach ($resChannels as $row) {
+		if (isset($arrStoredVideos[$row['playlist_id']])) {
+			$interval = date_diff(date_create($arrStoredVideos[$row['playlist_id']]), $now);
+			$dateDiff = $interval->format('%a') > 50 ? 50 : $interval->format('%a') + 1;
+		} else {
+			$dateDiff = 50;
+		}
+		
+        $queryParams = [
+            'playlistId' => $row['playlist_id'],
+            'maxResults' => $dateDiff
+        ];
+		// var_dump($queryParams);
+
+		try {
+			$rspPlaylistItems = $service->playlistItems->listPlaylistItems('snippet', $queryParams);
+		} catch(Exception $e){
+			$rspPlaylistItems['items'] = [];
+			echo "can't find playlist_id: {$row['playlist_id']}<br>";
+		}
+		
+        foreach ($rspPlaylistItems['items'] as $video) {
+			$arrVideos[$video->snippet->resourceId->videoId] = [
+				'channelTitle' => $video->snippet->channelTitle,
+				'title' => $video->snippet->title,
+				'videoId' => $video->snippet->resourceId->videoId,
+				'playlistId' => $row['playlist_id'],
+				'publishedAt' => $video->snippet->publishedAt,
+			];
+        }
+	}
+	
+	if (count($arrVideos) !== 0) {
+		foreach ($arrVideos as $arrSqlVideosId => $strSqlVideos) {
+			$title = str_replace('"', '""', $strSqlVideos['title']);
+			$sql = <<<END
+INSERT INTO videos (id, playlist_id, title, date_published, date_checked) 
+VALUES ("$arrSqlVideosId", "{$strSqlVideos['playlistId']}", "{$title}", "{$strSqlVideos['publishedAt']}", "{$now->format('Y-m-d\TH:i:s\Z')}")
+ON CONFLICT(id) DO UPDATE SET 
+playlist_id = "{$strSqlVideos['playlistId']}",
+title = "{$title}",
+date_published = "{$strSqlVideos['publishedAt']}",
+date_checked = "{$now->format('Y-m-d\TH:i:s\Z')}"
+WHERE id="$arrSqlVideosId";
+END;
+			// echo "$sql<br>";
+			$stmt = $pdo->prepare($sql);
+			$stmt->execute();
+		}
+		
+		$htmlBody .= 'Added videos: ' . count($arrVideos);
+	} else {
+		$htmlBody .= 'Videos up to date.';
+	}
+}
+
+function _updateVideosDetails($service, $pdo, &$htmlBody, $myChannelId) {
+	// Check if user has rated the videos.
+    $arrVideos = [];
+	$arrVideoIds = [];
+    $strVideos = '';
+    $i = 0;
+	
+	$sql = <<<END
+SELECT videos.id FROM videos 
+INNER JOIN playlists ON playlists.id = videos.my_playlist_id AND playlists.my_channel_id = '$myChannelId' 
+WHERE my_playlist_id = 0;
+END;
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+	$resVideos = $stmt->fetchAll();
+	
+    foreach ($resVideos as $row) {
+        $strVideos .= $row['id'] . ',';
+        $i++;
+
+        if ($i == 49) {
+            $arrVideoIds[] = $strVideos;
+            $strVideos = '';
+            $i = 0;
+        }
+    }
+
+    $arrVideoIds[] = $strVideos;
+
+    foreach ($arrVideoIds as $strVideos) {
+        $rspRatings = $service->videos->getRating($strVideos);
+
+        foreach ($rspRatings->items as $rating) {
+            if ($rating->rating == 'none') {
+                $arrVideos[$rating->videoId]['my_playlist_id'] = 0;
+            } elseif ($rating->rating == 'like') {
+                $arrVideos[$rating->videoId]['my_playlist_id'] = 1;
+            } elseif ($rating->rating == 'dislike') {
+                $arrVideos[$rating->videoId]['my_playlist_id'] = -1;
+            }
+        }
+    }
+	
+	// Check if in one of user's playlists.
+    $arrVideos2 = [];
+	$arrVideoIds = [];
+    $strVideos = '';
+    $i = 0;
+	
+	$sql = <<<END
+SELECT videos.id FROM videos
+INNER JOIN playlists ON playlists.id = videos.my_playlist_id AND playlists.my_channel_id = '$myChannelId' 
+WHERE duration IS NULL LIMIT 1000;
+END;
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+	$resVideos = $stmt->fetchAll();
+	
+    foreach ($resVideos as $row) {
+        $strVideos .= $row['id'] . ',';
+        $i++;
+
+        if ($i == 49) {
+            $arrVideoIds[] = $strVideos;
+            $strVideos = '';
+            $i = 0;
+        }
+    }
+
+    $arrVideoIds[] = $strVideos;
+	
+    foreach ($arrVideoIds as $strVideos) {
+        $queryParams = [
+            'id' => $strVideos
+        ];
+
+        $rspVideos = $service->videos->listVideos('contentDetails', $queryParams);
+		
+        foreach ($rspVideos->items as $video) {
+            $arrVideos2[$video->id]['duration'] = _covtime($video->contentDetails->duration);
+        }
+    }
+	
+	if (count($arrVideos) !== 0) {
+		foreach ($arrVideos as $strVideoId => $arrVideo) {
+			$sql = "UPDATE videos SET my_playlist_id = \"{$arrVideo['my_playlist_id']}\" WHERE id = \"$strVideoId\";";
+			$stmt = $pdo->prepare($sql);
+			$stmt->execute();
+		}
+		
+		$htmlBody .= 'Upated videos ratings: ' . count($arrVideos) . '<br>';
+	} else {
+		$htmlBody .= 'Videos ratings up to date.<br>';
+	}
+	
+	if (count($arrVideos2) !== 0) {
+		foreach ($arrVideos2 as $strVideoId => $arrVideo) {
+			$sql = "UPDATE videos SET duration = \"{$arrVideo['duration']}\" WHERE id = \"$strVideoId\";";
+			$stmt = $pdo->prepare($sql);
+			$stmt->execute();
+		}
+		
+		$htmlBody .= 'Upated videos duration: ' . count($arrVideos2) . '<br>';
+	} else {
+		$htmlBody .= 'Videos duration up to date.<br>';
+	}
 }
 
 function _ajaxUpdate($service, $pdo, &$htmlBody) {
@@ -598,10 +660,10 @@ function _ajaxUpdate($service, $pdo, &$htmlBody) {
 	} else {
 		$strAction = $_POST['data'][0];
 		$strBtn = $_POST['data'][1];
-		$strPlaylist = $_POST['data'][4];
+		$strPlaylist = isset($_POST['data'][4]) ? $_POST['data'][4] : null;
 		$strStatus = $strBtn == 'btnIgnore' ? -2 : 1;
 		
-		if ($strAction == '_listChannels') {
+		if ($strAction == '_listSubscriptions') {
 			$strTable = 'channels';
 		} elseif ($strAction == '_listPlaylists') {
 			$strTable = 'playlists';
@@ -609,11 +671,7 @@ function _ajaxUpdate($service, $pdo, &$htmlBody) {
 			$strTable = 'videos';
 		}
 		
-		$playlistItem = new Google_Service_YouTube_PlaylistItem();
-		$playlistItemSnippet = new Google_Service_YouTube_PlaylistItemSnippet();
-		$playlistItemSnippet->setPlaylistId($strPlaylist);
-		$resourceId = new Google_Service_YouTube_ResourceId();
-		$resourceId->setKind('youtube#video');
+		
 		$arrVideoId = [];
 		
 		foreach($_POST['data'][2] as $key => $isChecked) {
@@ -635,16 +693,24 @@ function _ajaxUpdate($service, $pdo, &$htmlBody) {
 			}
 		}
 		
-		$arrReversedVideoId = array_reverse($arrVideoId);
-		
-		foreach ($arrReversedVideoId as $videoId) {
-			$resourceId->setVideoId($videoId);
-			$playlistItemSnippet->setResourceId($resourceId);
-			$playlistItem->setSnippet($playlistItemSnippet);
-
-			$response = $service->playlistItems->insert('snippet', $playlistItem);
+		if (isset($strPlaylist)) {
+			$arrReversedVideoId = array_reverse($arrVideoId);
+			
+			$playlistItem = new Google_Service_YouTube_PlaylistItem();
+			$playlistItemSnippet = new Google_Service_YouTube_PlaylistItemSnippet();
+			$playlistItemSnippet->setPlaylistId($strPlaylist);
+			$resourceId = new Google_Service_YouTube_ResourceId();
+			$resourceId->setKind('youtube#video');
+			
+			foreach ($arrReversedVideoId as $videoId) {
+				$resourceId->setVideoId($videoId);
+				$playlistItemSnippet->setResourceId($resourceId);
+				$playlistItem->setSnippet($playlistItemSnippet);
+				// var_dump($playlistItem);
+				$response = $service->playlistItems->insert('snippet', $playlistItem);
+				// break;
+			}
 		}
-		
 		
 		if ($strBtn == 'btnSort') {
 			$htmlBody .= "Upated $strTable Order.<br>";
@@ -690,16 +756,14 @@ function _ajaxUpdate($service, $pdo, &$htmlBody) {
 	</head>
 	<body>
 		<a href="">Home</a> | 
-		<a href="?action=_updateSubscriptions">Update Subscriptions</a> | 
-		<a href="?action=_listSubscriptions">List Subscriptions</a> | 
-		
-		<a href="?action=_updatePlaylists">Update Playlists</a> | 
-		<a href="?action=_updatePlaylistsDetails">Update Playlists Details</a> | 
-		<a href="?action=_listPlaylists">List Playlists</a> | 
-		
-		<a href="?action=_updateVideos">Update Videos</a> | 
-		<a href="?action=_updateVideosDetails">Update Videos Details</a> | 
-		<a href="?action=_listVideos">List Videos</a>
+		List: <a href="?action=_listSubscriptions">Subscriptions</a> | 
+		<a href="?action=_listPlaylists">Playlists</a> | 
+		<a href="?action=_listVideos">Videos</a> -- 
+		Update: <a href="?action=_updateSubscriptions">Upd Subscriptions</a> | 
+		<a href="?action=_updatePlaylists">Upd Playlists</a> | 
+		<a href="?action=_updatePlaylistsDetails">Upd Playlists Details</a> | 
+		<a href="?action=_updateVideos">Upd Videos</a> | 
+		<a href="?action=_updateVideosDetails">Upd Videos Details</a>
 		<br>
 		<?=$htmlBody?>
 		<?php
