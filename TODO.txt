@@ -1,0 +1,82 @@
+table: load data with ajax.
+bug? liked video not updated in DB
+update videos from my playlists : only after last checked.
+bug: updates do not take all entries, maybe 49 instead of 50?
+Laravel + Vue.js
+--
+DB: videos: add views
+	"statistics": {
+		"viewCount": "1503386",
+		"likeCount": "121673",
+		"dislikeCount": "1867",
+		"favoriteCount": "0",
+		"commentCount": "17190"
+--
+table: refresh after action.
+table: manage half-width window: padding, spacing, min or fixed width.
+?DB: my playlists, field: is_watch_later? tags? or add weigth?
+?DB: videos: get details for id already in database?
+--
+Get new videos from notifications or with full bell
+PHP main: check API instead of a big try catch.
+show thumbs, extended cells on click
+-----------
+créer règles :
+- ordre d'importance des règles
+- include / exclude (NOT, OR, AND)
+- chaine
+- durée
+- titre
+- date
+--------
+LATER:
+/*
+best of:
+zerator
+moman
+gius
+mistermv 
+*/
+------------
+DONE:
+0- manage auth with cookie
+1- store data to database
+- channels: id, name, upload playlist id, last upload, date_checked (playlist)
+- videos: id, playlist id, my playlist id, checked
+2- display data from database
+DB: 1 seule base pour chaque user. session par cookie, pas dans bdd.
+Use Ajax on drag
+add to wl : Ajax et pas URL.
+Merge with playlist page
+use a PHP framework?
+DB: store date and time for each API request, and only request until this time for next request.
+Kind of Trello
+List only those marked as not sorted/ignored/read...
+DB: video length, playlist: [not sorted:0, liked:1, disliked:-1, ignored:-2], 
+longer session (prevent 401).
+_updateSubscriptions: not delete. select, then update or create.
+DB: Channels: manage weight and sorting: move in table, then on button click, get id order, and save weigth incrementally.
+table: escape \'
+DB: videos: add duration.
+table: video title: carriage return or "..."
+- tableau triable/groupable (en DB).
+- bouton rafraichir
+ . pour chaque chaine: récupérer nouvelles vidéos (REST) depuis plus ancienne date
+ . pour chaque chaine: maj plus ancienne date.
+DB: ordre d'importance des chaines
+html: show buttons only when _listSubscriptions, show pager only when lists.
+table: save parameters.
+DB: videos: add status
+add button to hide specific videos, like channels.
+-> when updating ratings, do not update if rating is 0 and video is hidden, or put in 2 different fields.
+-> or do not check rating for hidden videos.
+DB: update all my playlists.
+playlist (dropdown) : playlists, pas intéressé, ne rien faire
+ . bouton appliquer (ajax).
+ . ajouter dans les playlists ou ignorer
+table: filter saved to different vars.
+multi account
+bug: only few videos listed
+bug: update videos and videos details never finishes.
+bug: list videos: do not show if in playlist.
+séparer update vidéo et my playlists.
