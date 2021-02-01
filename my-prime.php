@@ -284,6 +284,8 @@ END;
         } else {
             $status = "<a href='https://www.youtube.com/playlist?list={$row['my_playlist_id']}' target='_blank'>{$row['my_playlist_name']}</a>";
         }
+		
+		$row['date_published'] = substr($row['date_published'], 0, 10);
         
         $arrTable[] = <<<END
 	<tr>
@@ -309,7 +311,7 @@ END;
 				<th class="group-letter-1">Video</th>
 				<th class="group-Number-1">Duration</th>
 				<th class="group-Number-1">Priority</th>
-				<th class="group-date-month">Published</th>
+				<th class="group-date-day">Published</th>
 				<th class="group-date-month">Pub Month</th>
 				<th class="group-word">Status</th>
 			</tr>
@@ -452,8 +454,15 @@ function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId)
                 'playlistId' => $myPlaylist['id']
             ];
             
-            $myPlaylistItems = $service->playlistItems->listPlaylistItems('contentDetails', $queryParams);
-            $pageToken = $myPlaylistItems->nextPageToken;
+			try {
+				$myPlaylistItems = $service->playlistItems->listPlaylistItems('contentDetails', $queryParams);
+				$pageToken = $myPlaylistItems->nextPageToken;
+			} catch (Exception $e) {
+				$myPlaylistItems = [];
+				$pageToken = null;
+				echo "can't find playlist_id: {$myPlaylist['id']}<br>";
+			}
+			
             
             foreach ($myPlaylistItems as $myPlaylistItemDetails) {
                 $arrVideos[$myPlaylistItemDetails->contentDetails->videoId]['my_playlist_id'] = $myPlaylist['id'];
@@ -576,9 +585,10 @@ function _updateVideosDetails($service, $pdo, &$htmlBody, $myChannelId)
     
     $sql = <<<END
 	SELECT videos.id FROM videos 
-	INNER JOIN playlists ON playlists.id = videos.my_playlist_id AND playlists.my_channel_id = '$myChannelId' 
-	WHERE my_playlist_id = 0;
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.my_channel_id = '$myChannelId' 
+	WHERE (my_playlist_id = 0 OR my_playlist_id IS NULL);
 END;
+	// var_dump($sql);
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resVideos = $stmt->fetchAll();
@@ -610,7 +620,7 @@ END;
         }
     }
     
-    // Check if in one of user's playlists.
+    // Check if duration is defined.
     $arrVideos2 = [];
     $arrVideoIds = [];
     $strVideos = '';
@@ -618,7 +628,7 @@ END;
     
     $sql = <<<END
 	SELECT videos.id FROM videos
-	INNER JOIN playlists ON playlists.id = videos.my_playlist_id AND playlists.my_channel_id = '$myChannelId' 
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.my_channel_id = '$myChannelId' 
 	WHERE duration IS NULL LIMIT 1000;
 END;
     $stmt = $pdo->prepare($sql);
@@ -716,8 +726,8 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
         }
         
         if (isset($strPlaylist)) {
+            var_dump($strPlaylist);
             $arrReversedVideoId = array_reverse($arrVideoId);
-            
             $playlistItem = new Google_Service_YouTube_PlaylistItem();
             $playlistItemSnippet = new Google_Service_YouTube_PlaylistItemSnippet();
             $playlistItemSnippet->setPlaylistId($strPlaylist);
@@ -729,6 +739,7 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
                 $playlistItemSnippet->setResourceId($resourceId);
                 $playlistItem->setSnippet($playlistItemSnippet);
                 // var_dump($playlistItem);
+                var_dump($videoId);
                 $response = $service->playlistItems->insert('snippet', $playlistItem);
                 // break;
             }
