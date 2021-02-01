@@ -1,5 +1,0 @@
-<?php
-$OAUTH2_CLIENT_ID = '';
-$OAUTH2_CLIENT_SECRET = '';
-$DEVKEY = '';
-?>
