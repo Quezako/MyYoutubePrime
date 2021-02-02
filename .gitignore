@@ -1,14 +1,2 @@
-composer.lock
-config.php
-.env
-*.sqlite
-*.db
-*.sqbpro
-
 z-new/
 z-old/
-vendor/
-bootstrap/cache/*
-storage/framework/sessions/*
-storage/framework/views/*
-storage/logs/*
