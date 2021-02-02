@@ -17,3 +17,14 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+//Vue js Api Route
+
+Route::apiResources(
+	[
+		// 'user' => 'API\UserController',
+		'channels' => 'API\ChannelsController',
+		'my_playlists' => 'API\myPlaylistsController',
+		'videos' => 'API\VideosController',
+	]
+);

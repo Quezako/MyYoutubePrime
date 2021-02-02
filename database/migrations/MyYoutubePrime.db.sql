@@ -1,34 +1,32 @@
-BEGIN TRANSACTION;
-CREATE TABLE IF NOT EXISTS "channels" (
-	"id"	TEXT UNIQUE,
-	"playlist_id"	TEXT,
-	"my_channel_id"	INTEGER,
-	"name"	TEXT,
-	"date_last_upload"	TEXT,
-	"date_checked"	INTEGER,
-	"status"	INTEGER,
-	"sort"	INTEGER,
-	PRIMARY KEY("id")
+CREATE TABLE IF NOT EXISTS `channels` (
+	`id`	VARCHAR(50) UNIQUE,
+	`playlist_id`	VARCHAR(50) NOT NULL UNIQUE,
+	`my_channel_id`	VARCHAR(50),
+	`name`	VARCHAR(200),
+	`date_last_upload`	VARCHAR(50),
+	`date_checked`	INTEGER(50),
+	`status`	INTEGER(50),
+	`sort`	INTEGER(0),
+	PRIMARY KEY(`id`)
 );
-CREATE TABLE IF NOT EXISTS "my_playlists" (
-	"id"	TEXT NOT NULL UNIQUE,
-	"my_channel_id"	TEXT,
-	"name"	TEXT,
-	"sort"	INTEGER,
-	"status"	INTEGER,
-	PRIMARY KEY("id")
+CREATE TABLE IF NOT EXISTS `my_playlists` (
+	`id`	VARCHAR(50) NOT NULL UNIQUE,
+	`my_channel_id`	VARCHAR(50),
+	`name`	VARCHAR(200),
+	`status`	INTEGER(50),
+	`sort`	INTEGER(0),
+	PRIMARY KEY(`id`)
 );
-CREATE TABLE IF NOT EXISTS "videos" (
-	"id"	TEXT UNIQUE,
-	"playlist_id"	TEXT,
-	"my_playlist_id"	TEXT,
-	"title"	TEXT,
-	"date_checked"	TEXT,
-	"date_published"	TEXT,
-	"duration"	TEXT,
-	"status"	INTEGER,
-	PRIMARY KEY("id"),
-	FOREIGN KEY("my_playlist_id") REFERENCES "my_playlists"("id"),
-	FOREIGN KEY("playlist_id") REFERENCES "channels"("playlist_id")
+CREATE TABLE IF NOT EXISTS `videos` (
+	`id`	VARCHAR(50) UNIQUE,
+	`channel_playlist_id`	VARCHAR(50),
+	`my_playlist_id`	VARCHAR(50),
+	`title`	VARCHAR(200),
+	`date_checked`	VARCHAR(50),
+	`date_published`	VARCHAR(50),
+	`duration`	VARCHAR(50),
+	`status`	INTEGER(50),
+	PRIMARY KEY(`id`),
+	FOREIGN KEY(`my_playlist_id`) REFERENCES `my_playlists`(`id`),
+	FOREIGN KEY(`channel_playlist_id`) REFERENCES `channels`(`playlist_id`)
 );
-COMMIT;
