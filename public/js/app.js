@@ -1842,13 +1842,15 @@ module.exports = {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony import */ var vue_router__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! vue-router */ "./node_modules/vue-router/dist/vue-router.esm.js");
-/* harmony import */ var sweetalert2__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! sweetalert2 */ "./node_modules/sweetalert2/dist/sweetalert2.all.js");
-/* harmony import */ var sweetalert2__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(sweetalert2__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var vform__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! vform */ "./node_modules/vform/dist/vform.common.js");
-/* harmony import */ var vform__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(vform__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var _routes__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./routes */ "./resources/assets/js/routes.js");
+/* harmony import */ var vue__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! vue */ "./node_modules/vue/dist/vue.runtime.esm.js");
+/* harmony import */ var vue_router__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! vue-router */ "./node_modules/vue-router/dist/vue-router.esm.js");
+/* harmony import */ var sweetalert2__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! sweetalert2 */ "./node_modules/sweetalert2/dist/sweetalert2.all.js");
+/* harmony import */ var sweetalert2__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(sweetalert2__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var vform__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! vform */ "./node_modules/vform/dist/vform.common.js");
+/* harmony import */ var vform__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(vform__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var _routes__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./routes */ "./resources/assets/js/routes.js");
 __webpack_require__(/*! ./bootstrap */ "./resources/assets/js/bootstrap.js");
+
 
 window.Vue = __webpack_require__(/*! vue */ "./node_modules/vue/dist/vue.runtime.esm.js"); //Import Vue Filter
 
@@ -1862,36 +1864,36 @@ __webpack_require__(/*! ./customEvents */ "./resources/assets/js/customEvents.js
 
 
 
-Vue.use(vue_router__WEBPACK_IMPORTED_MODULE_0__.default); //Import Sweetalert2
+vue__WEBPACK_IMPORTED_MODULE_0__.default.use(vue_router__WEBPACK_IMPORTED_MODULE_1__.default); //Import Sweetalert2
 
 
-window.Swal = (sweetalert2__WEBPACK_IMPORTED_MODULE_1___default());
-var Toast = sweetalert2__WEBPACK_IMPORTED_MODULE_1___default().mixin({
+window.Swal = (sweetalert2__WEBPACK_IMPORTED_MODULE_2___default());
+var Toast = sweetalert2__WEBPACK_IMPORTED_MODULE_2___default().mixin({
   toast: true,
   position: 'top-end',
   showConfirmButton: false,
   timer: 3000,
   timerProgressBar: true,
   onOpen: function onOpen(toast) {
-    toast.addEventListener('mouseenter', (sweetalert2__WEBPACK_IMPORTED_MODULE_1___default().stopTimer));
-    toast.addEventListener('mouseleave', (sweetalert2__WEBPACK_IMPORTED_MODULE_1___default().resumeTimer));
+    toast.addEventListener('mouseenter', (sweetalert2__WEBPACK_IMPORTED_MODULE_2___default().stopTimer));
+    toast.addEventListener('mouseleave', (sweetalert2__WEBPACK_IMPORTED_MODULE_2___default().resumeTimer));
   }
 });
 window.Toast = Toast; //Import v-from
 
 
-window.Form = vform__WEBPACK_IMPORTED_MODULE_2__.Form;
-Vue.component(vform__WEBPACK_IMPORTED_MODULE_2__.HasError.name, vform__WEBPACK_IMPORTED_MODULE_2__.HasError);
-Vue.component(vform__WEBPACK_IMPORTED_MODULE_2__.AlertError.name, vform__WEBPACK_IMPORTED_MODULE_2__.AlertError); //Routes
+window.Form = vform__WEBPACK_IMPORTED_MODULE_3__.Form;
+vue__WEBPACK_IMPORTED_MODULE_0__.default.component(vform__WEBPACK_IMPORTED_MODULE_3__.HasError.name, vform__WEBPACK_IMPORTED_MODULE_3__.HasError);
+vue__WEBPACK_IMPORTED_MODULE_0__.default.component(vform__WEBPACK_IMPORTED_MODULE_3__.AlertError.name, vform__WEBPACK_IMPORTED_MODULE_3__.AlertError); //Routes
 
  //Register Routes
 
-var router = new vue_router__WEBPACK_IMPORTED_MODULE_0__.default({
-  routes: _routes__WEBPACK_IMPORTED_MODULE_3__.routes,
+var router = new vue_router__WEBPACK_IMPORTED_MODULE_1__.default({
+  routes: _routes__WEBPACK_IMPORTED_MODULE_4__.routes,
   mode: 'hash'
 }); //Vue.component('example-component', require('./components/ExampleComponent.vue').default);
 
-var app = new Vue({
+var app = new vue__WEBPACK_IMPORTED_MODULE_0__.default({
   el: '#app',
   router: router
 });
