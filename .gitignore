@@ -5,6 +5,8 @@ config.php
 *.db
 *.sqbpro
 
+z-new/
+z-old/
 vendor/
 bootstrap/cache/*
 storage/framework/sessions/*
