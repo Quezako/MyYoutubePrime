@@ -30,6 +30,7 @@ $(function() {
 		var arrChecked = [];
 		var action = getUrlParameter('action');
 		var strCol = (action == '_listVideos') ? '3' : '2';
+		$('#status').html('loading...');
 
  		$('.odd, .even').each(function() {
 			strHref = $(this).find('td:nth-child(' + strCol + ')').find('a').attr('href');

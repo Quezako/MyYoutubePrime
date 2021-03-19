@@ -60,8 +60,6 @@ try {
 // Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
     try {
-        $myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
-        // $myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
         _getMyChannelId($service, $myChannelId);
     } catch (Google_Service_Exception $e) {
         $htmlBody .= sprintf(
@@ -110,6 +108,9 @@ if ($client->getAccessToken()) {
             case '_updatePlaylistsDetails':
                 _updatePlaylistsDetails($service, $pdo, $htmlBody, $myChannelId);
                 break;
+            case '_updateMusicPlaylistsDetails':
+                _updateMusicPlaylistsDetails($service, $pdo, $htmlBody, $myChannelId);
+                break;
             case '_ajaxUpdate':
                 _ajaxUpdate($service, $pdo, $htmlBody);
                 break;
@@ -128,7 +129,6 @@ END;
 } else {
     _showAuth($client, $htmlBody);
 }
-
 
 function _showAuth($client, &$htmlBody)
 {
@@ -169,7 +169,7 @@ function _getMyChannelId($service, &$myChannelId)
 
 function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId)
 {
-    $sql = "SELECT * FROM channels WHERE my_channel_id = '$myChannelId' ORDER BY sort ASC LIMIT 200";
+    $sql = "SELECT * FROM channels WHERE my_channel_id = '$myChannelId' ORDER BY sort ASC LIMIT 500";
     // var_dump($sql);
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
@@ -252,6 +252,14 @@ END;
 
 function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId)
 {
+	if ($myChannelId == '') {
+		if (isset($_GET['type']) && $_GET['type'] == 'music') {
+			$myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
+		} else {
+			$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
+		}
+	}
+	
     $sql = <<<END
 	SELECT 
 		videos.*, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
@@ -262,10 +270,11 @@ function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId)
 	WHERE channels.status > 0 
 		AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL) 
 		AND (videos.status <> -2 OR videos.status IS NULL)
-	ORDER BY SUBSTR(videos.date_published, 0, 8) DESC, channel_sort ASC, CAST(duration AS INT) ASC
+	ORDER BY channel_sort ASC, SUBSTR(videos.date_published, 0, 8) DESC, CAST(duration AS INT) ASC
 	LIMIT 1000;
 END;
     // echo("<pre>$sql</pre>");
+	// die;
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannels = $stmt->fetchAll();
@@ -438,8 +447,19 @@ function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId)
 {
     $arrVideos = [];
     
-    $sql = "SELECT id FROM playlists WHERE my_channel_id = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+	if (isset($_GET['type']) && $_GET['type'] == 'music') {
+		$sql = <<<END
+SELECT id FROM playlists 
+WHERE id = 'PLPjkJ-eKlc2yp5mv6wuVo_UfhT2ZsZk5m' 
+OR id = 'PLPjkJ-eKlc2zjByQjtI1M8ELC8TBeb2DN' 
+OR id = 'PLPjkJ-eKlc2yp5mv6wuVo_UfhT2ZsZk5m';
+END;
+	} else {
+		$sql = "SELECT id FROM playlists WHERE my_channel_id = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+	}
+    
     // var_dump($sql);
+	// die;
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resPlaylists = $stmt->fetchAll();
@@ -448,15 +468,18 @@ function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId)
         $pageToken = "";
 
         while (!is_null($pageToken)) {
-            $queryParams = [
-                'maxResults' => 50,
-                'pageToken' => $pageToken,
-                'playlistId' => $myPlaylist['id']
-            ];
+			$queryParams = [
+				'maxResults' => 200,
+				'pageToken' => $pageToken,
+				'playlistId' => $myPlaylist['id']
+			];
+			
+			// var_dump($queryParams);
             
 			try {
 				$myPlaylistItems = $service->playlistItems->listPlaylistItems('contentDetails', $queryParams);
 				$pageToken = $myPlaylistItems->nextPageToken;
+				// var_dump($pageToken);
 			} catch (Exception $e) {
 				$myPlaylistItems = [];
 				$pageToken = null;
@@ -466,9 +489,13 @@ function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId)
             
             foreach ($myPlaylistItems as $myPlaylistItemDetails) {
                 $arrVideos[$myPlaylistItemDetails->contentDetails->videoId]['my_playlist_id'] = $myPlaylist['id'];
+				// var_dump($myPlaylistItemDetails);
             }
         }
     }
+	// var_dump($myPlaylistItems->pageInfo);
+	// var_dump($arrVideos);
+	// die;
     
     if (count($arrVideos) !== 0) {
         foreach ($arrVideos as $strVideoId => $strPlaylistId) {
@@ -479,6 +506,7 @@ function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId)
 	UPDATE SET my_playlist_id="{$strPlaylistId['my_playlist_id']}" 
 	WHERE id="$strVideoId";
 END;
+	// var_dump($arrVideos);
             $stmt = $pdo->prepare($sql);
             $stmt->execute();
         }
@@ -494,7 +522,9 @@ function _updateVideos($service, $pdo, &$htmlBody, $myChannelId)
     $now = date_create();
     
     $sql = "SELECT playlist_id FROM channels WHERE my_channel_id = '$myChannelId' AND status = 1;";
+    // $sql = "SELECT playlist_id FROM channels WHERE my_channel_id = '$myChannelId' AND status = 1 AND sort < 50;";
     // var_dump($sql);
+	// die;
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannels = $stmt->fetchAll();
@@ -526,6 +556,7 @@ END;
         } else {
             $dateDiff = 50;
         }
+        // $dateDiff = 5000;
         
         $queryParams = [
             'playlistId' => $row['playlist_id'],
@@ -705,12 +736,14 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
         
         
         $arrVideoId = [];
-        
+        $i = 0;
+		
         foreach ($_POST['data'][2] as $key => $isChecked) {
             if ($strBtn == 'btnSort') {
                 $strSort = $key + 1;
                 $sql = "UPDATE $strTable SET sort=\"{$strSort}\" WHERE id = \"{$_POST['data'][3][$key]}\";";
                 // var_dump($sql);
+				$i++;
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute();
             } elseif ($isChecked == 1) {
@@ -718,6 +751,7 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
                     $arrVideoId[] = $_POST['data'][3][$key];
                 } else {
                     $sql = "UPDATE $strTable SET status=\"$strStatus\" WHERE id = \"{$_POST['data'][3][$key]}\";";
+					$i++;
                     // var_dump($sql);
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute();
@@ -735,22 +769,28 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
             $resourceId->setKind('youtube#video');
             
             foreach ($arrReversedVideoId as $videoId) {
+				// var_dump($videoId);
                 $resourceId->setVideoId($videoId);
                 $playlistItemSnippet->setResourceId($resourceId);
                 $playlistItem->setSnippet($playlistItemSnippet);
                 // var_dump($playlistItem);
-                var_dump($videoId);
-                $response = $service->playlistItems->insert('snippet', $playlistItem);
+                // var_dump($videoId);
+				
+				try {
+					$response = $service->playlistItems->insert('snippet', $playlistItem);
+				} catch (Exception $e) {
+					echo "can't find video_id: {$videoId}<br>";
+				}
                 // break;
             }
         }
         
         if ($strBtn == 'btnSort') {
-            $htmlBody .= "Upated $strTable Order.<br>";
+            $htmlBody .= "Upated $strTable Order ($i).<br>";
         } elseif (count($arrVideoId) > 0) {
             $htmlBody .= "Inserted " . count($arrVideoId) . " videos into playlist.<br>";
         } else {
-            $htmlBody .= "Upated $strTable Status.<br>";
+            $htmlBody .= "Upated $strTable Status ($i).<br>";
         }
         
         echo $htmlBody;
@@ -764,6 +804,8 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 <html>
 	<head>
 		<title>My Prime</title>
+		<link rel="shortcut icon" type="image/ico" href="assets/favicon/favicon.ico"/>
+		
 		<!-- Tablesorter: required -->
 		<script src="js/jquery-latest.min.js"></script>
 		<script src="js/jquery.tablesorter.min.js"></script>
@@ -788,13 +830,15 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 		<script src="js/my-prime.js"></script>
 	</head>
 	<body>
-		<a href="">Home</a> | 
+		<a href="?">Home</a> | 
 		List: <a href="?action=_listSubscriptions">Subscriptions</a> | 
 		<a href="?action=_listPlaylists">Playlists</a> | 
-		<a href="?action=_listVideos">Videos</a> -- 
+		<a href="?action=_listVideos">Videos</a>  | 
+		<a href="?action=_listVideos&type=music">Music</a> -- 
 		Update: <a href="?action=_updateSubscriptions">Upd Subscriptions</a> | 
 		<a href="?action=_updatePlaylists">Upd Playlists</a> | 
 		<a href="?action=_updatePlaylistsDetails">Upd Playlists Details</a> | 
+		<a href="?action=_updatePlaylistsDetails&type=music">Upd MUSIC Playlists Details</a> | 
 		<a href="?action=_updateVideos">Upd Videos</a> | 
 		<a href="?action=_updateVideosDetails">Upd Videos Details</a>
 		<br>
