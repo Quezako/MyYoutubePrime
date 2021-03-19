@@ -1,10 +1,12 @@
+message: added videos, rating: separate added from updated.
+playlists externes ajoutées à ma librairie
 table: load data with ajax.
 bug? liked video not updated in DB
 update videos from my playlists : only after last checked.
 bug: updates do not take all entries, maybe 49 instead of 50?
 for each element already in database: check if deleted
 js: show loader while waiting ajax response
-check if available on yt music
+check if video not blocked on yt music
 --
 Laravel + Vue.js
 --
@@ -16,6 +18,7 @@ DB: videos: add views
 		"favoriteCount": "0",
 		"commentCount": "17190"
 --
+longer session (prevent 401).
 table: refresh after action.
 table: manage half-width window: padding, spacing, min or fixed width.
 ?DB: my playlists, field: is_watch_later? tags? or add weigth?
@@ -57,7 +60,6 @@ DB: store date and time for each API request, and only request until this time f
 Kind of Trello
 List only those marked as not sorted/ignored/read...
 DB: video length, playlist: [not sorted:0, liked:1, disliked:-1, ignored:-2], 
-longer session (prevent 401).
 _updateSubscriptions: not delete. select, then update or create.
 DB: Channels: manage weight and sorting: move in table, then on button click, get id order, and save weigth incrementally.
 table: escape \'
