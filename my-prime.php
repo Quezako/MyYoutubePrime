@@ -85,7 +85,7 @@ if ($client->getAccessToken()) {
     if (isset($_GET['action'])) {
         switch ($_GET['action']) {
             case '_listSubscriptions':
-                _listSubscriptions($service, $pdo, $htmlTable, $myChannelId);
+                _listSubscriptions($service, $pdo, $htmlTable, $myChannelId, $htmlSelect);
                 break;
             case '_listPlaylists':
                 _listPlaylists($service, $pdo, $htmlTable, $myChannelId);
@@ -167,9 +167,36 @@ function _getMyChannelId($service, &$myChannelId)
     $myChannelId = $rspMyChannel[0]->id;
 }
 
-function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId)
+function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId, &$htmlSelect)
 {
-    $sql = "SELECT * FROM channels WHERE my_channel_id = '$myChannelId' ORDER BY sort ASC LIMIT 500";
+	$intType = 1;
+	
+	if ($myChannelId == 'UCjp4sUlXfWngnLyPfA5SrIQ') {
+		$intType = 2;
+	}
+	
+	$sql = "SELECT * FROM channel_types WHERE type = $intType";
+    // var_dump($sql);
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+    $resChannelTypes = $stmt->fetchAll();
+    
+    $htmlSelect = '<select name="selChannelTypes" id="selChannelTypes">';
+    
+    foreach ($resChannelTypes as $row) {
+        $htmlSelect .= "<option value='{$row["id"]}'>{$row["label"]}</option>";
+    }
+    
+    $htmlSelect .= '</select>';
+	
+    $sql = <<<END
+SELECT channels.*, channel_types.label FROM channels 
+LEFT JOIN channel_types ON channels.type = channel_types.id 
+WHERE my_channel_id = '$myChannelId' 
+-- AND channels.type IS NULL
+ORDER BY sort ASC
+LIMIT 300;
+END;
     // var_dump($sql);
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
@@ -178,15 +205,18 @@ function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId)
     $arrTable = [];
     
     foreach ($resChannels as $row) {
+		$type = $row['type'];
+		if ($type !== null) {
+			$type = sprintf('%02d', $row['type']);	
+		}
         $arrTable[] = <<<END
 	<tr>
 		<td><input type='checkbox'></td>
 		<td><a href='https://www.youtube.com/channel/{$row['id']}' target='_blank'>{$row['name']}</a></td>
 		<td><a href='https://www.youtube.com/playlist?list={$row['playlist_id']}' target='_blank'>{$row['name']}</a></td>
-		<td>{$row['date_last_upload']}</td>
-		<td>{$row['date_checked']}</td>
 		<td>{$row['status']}</td>
 		<td>{$row['sort']}</td>
+		<td>{$type}-{$row['label']}</td>
 	</tr>
 END;
     }
@@ -199,10 +229,9 @@ END;
 				<th class="group-word"><input type='checkbox' id='checkAll' /> Action</th>
 				<th class="group-letter-1">Channel</th>
 				<th class="group-letter-1">Uploads</th>
-				<th class="group-date-month">Last Upload</th>
-				<th class="group-date-month">Checked</th>
 				<th class="group-date-month">Status</th>
 				<th class="group-date-month">Sort</th>
+				<th class="group-letter-1">Type</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -262,11 +291,12 @@ function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId)
 	
     $sql = <<<END
 	SELECT 
-		videos.*, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
+		videos.*, channel_types.label, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
 		playlists.name AS my_playlist_name, channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
 	FROM videos 
 	LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.my_channel_id = '$myChannelId'
 	INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.my_channel_id = '$myChannelId'
+	LEFT JOIN channel_types ON channels.type = channel_types.id 
 	WHERE channels.status > 0 
 		AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL) 
 		AND (videos.status <> -2 OR videos.status IS NULL)
@@ -282,18 +312,10 @@ END;
     $arrTable = [];
     
     foreach ($resChannels as $row) {
-        if ($row['my_playlist_id'] == "0") {
-            $status = "To sort";
-        } elseif ($row['my_playlist_id'] == "1") {
-            $status = "Liked";
-        } elseif ($row['my_playlist_id'] == "-1") {
-            $status = "Disliked";
-        } elseif ($row['my_playlist_id'] == "2") {
-            $status = "Ignored";
-        } else {
-            $status = "<a href='https://www.youtube.com/playlist?list={$row['my_playlist_id']}' target='_blank'>{$row['my_playlist_name']}</a>";
-        }
-		
+		// $type = $row['type'];
+		// if ($type !== null) {
+			// $type = sprintf('%02d', $row['type']);	
+		// }
 		$row['date_published'] = substr($row['date_published'], 0, 10);
         
         $arrTable[] = <<<END
@@ -304,8 +326,7 @@ END;
 		<td>{$row['duration']}</td>
 		<td>{$row['channel_sort']}</td>
 		<td>{$row['date_published']}</td>
-		<td>{$row['video_date_pub']}</td>
-		<td>$status</td>
+		<td>{$row['label']}</td>
 	</tr>
 END;
     }
@@ -321,8 +342,7 @@ END;
 				<th class="group-Number-1">Duration</th>
 				<th class="group-Number-1">Priority</th>
 				<th class="group-date-day">Published</th>
-				<th class="group-date-month">Pub Month</th>
-				<th class="group-word">Status</th>
+				<th class="group-letter-1">Type</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -451,8 +471,18 @@ function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId)
 		$sql = <<<END
 SELECT id FROM playlists 
 WHERE id = 'PLPjkJ-eKlc2yp5mv6wuVo_UfhT2ZsZk5m' 
-OR id = 'PLPjkJ-eKlc2zjByQjtI1M8ELC8TBeb2DN' 
-OR id = 'PLPjkJ-eKlc2yp5mv6wuVo_UfhT2ZsZk5m';
+OR id = 'PLPjkJ-eKlc2zjByQjtI1M8ELC8TBeb2DN';
+END;
+	} elseif (isset($_GET['type']) && $_GET['type'] == 'video') {
+		$sql = <<<END
+SELECT id FROM playlists 
+WHERE id = 'PL52YqI0PbEYU1_3bne33bXQYAviFN8AD4'
+OR id = 'PL52YqI0PbEYXZv2APe7B3wPkgdVXi1yK7'
+OR id = 'PL52YqI0PbEYXMGfA71veOZCM_4NAWVopj'
+OR id = 'PL52YqI0PbEYX18AmDYyv1lx28lIzwYgTb'
+OR id = 'PL52YqI0PbEYV_g-5wdATX6GV7QPXvPadH'
+OR id = 'PL52YqI0PbEYUxtItqu6WAIqj1C7hX4LUL'
+OR id = 'PL52YqI0PbEYXzJuYKJFyCCu1lREuoMhnO';
 END;
 	} else {
 		$sql = "SELECT id FROM playlists WHERE my_channel_id = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
@@ -530,12 +560,12 @@ function _updateVideos($service, $pdo, &$htmlBody, $myChannelId)
     $resChannels = $stmt->fetchAll();
     
     $sql = <<<END
-	SELECT * FROM (
-		SELECT playlist_id, date_checked 
-		FROM videos
-		INNER JOIN playlists ON playlists.id = videos.my_playlist_id AND playlists.my_channel_id = '$myChannelId' 
-		ORDER BY date_checked DESC
-	) GROUP BY playlist_id;
+SELECT * FROM (
+	SELECT videos.playlist_id, videos.date_checked 
+	FROM videos
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.my_channel_id = '$myChannelId' 
+	ORDER BY videos.date_checked DESC
+) GROUP BY playlist_id;
 END;
     // var_dump($sql);
     $stmt = $pdo->prepare($sql);
@@ -549,40 +579,52 @@ END;
         $arrStoredVideos[$row['playlist_id']] = $row['date_checked'];
     }
     
+	$numItems = 0;
+	
     foreach ($resChannels as $row) {
         if (isset($arrStoredVideos[$row['playlist_id']])) {
             $interval = date_diff(date_create($arrStoredVideos[$row['playlist_id']]), $now);
-            $dateDiff = $interval->format('%a') > 50 ? 50 : $interval->format('%a') + 1;
+            // $dateDiff = $interval->format('%a') > 50 ? 50 : $interval->format('%a') + 1;
+            $dateDiff = $interval->format('%a') > 50 ? 50 : $interval->format('%a');
         } else {
             $dateDiff = 50;
         }
         // $dateDiff = 5000;
         
-        $queryParams = [
-            'playlistId' => $row['playlist_id'],
-            'maxResults' => $dateDiff
-        ];
-        // var_dump($queryParams);
+		if ($dateDiff > 0) {
+			$queryParams = [
+				'playlistId' => $row['playlist_id'],
+				'maxResults' => $dateDiff
+			];
+			// var_dump($queryParams);
 
-        try {
-            $rspPlaylistItems = $service->playlistItems->listPlaylistItems('snippet', $queryParams);
-        } catch (Exception $e) {
-            $rspPlaylistItems['items'] = [];
-            echo "can't find playlist_id: {$row['playlist_id']}<br>";
-        }
-        
-        foreach ($rspPlaylistItems['items'] as $video) {
-            $arrVideos[$video->snippet->resourceId->videoId] = [
-                'channelTitle' => $video->snippet->channelTitle,
-                'title' => $video->snippet->title,
-                'videoId' => $video->snippet->resourceId->videoId,
-                'playlistId' => $row['playlist_id'],
-                'publishedAt' => $video->snippet->publishedAt,
-            ];
-        }
+			try {
+				$rspPlaylistItems = $service->playlistItems->listPlaylistItems('snippet', $queryParams);
+			} catch (Exception $e) {
+				$rspPlaylistItems['items'] = [];
+				echo "can't find playlist_id: {$row['playlist_id']}<br>";
+			}
+			
+			foreach ($rspPlaylistItems['items'] as $video) {
+				$arrVideos[$video->snippet->resourceId->videoId] = [
+					'channelTitle' => $video->snippet->channelTitle,
+					'title' => $video->snippet->title,
+					'videoId' => $video->snippet->resourceId->videoId,
+					'playlistId' => $row['playlist_id'],
+					'publishedAt' => $video->snippet->publishedAt,
+				];
+				
+				$numItems++;
+				echo $row['playlist_id'] . ': ' . $video->snippet->resourceId->videoId . '<br />';
+			}
+			
+			if ($numItems > 200) {
+				break;
+			}
+		}
     }
     
-    if (count($arrVideos) !== 0) {
+    if (count($arrVideos) > 0) {
         foreach ($arrVideos as $arrSqlVideosId => $strSqlVideos) {
             $title = str_replace('"', '""', $strSqlVideos['title']);
             $sql = <<<END
@@ -723,9 +765,12 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
     } else {
         $strAction = $_POST['data'][0];
         $strBtn = $_POST['data'][1];
-        $strPlaylist = isset($_POST['data'][4]) ? $_POST['data'][4] : null;
+        $strPlaylist = (isset($_POST['data'][4]) && $_POST['data'][4] !== '') ? $_POST['data'][4] : null;
+        $strType = isset($_POST['data'][5]) ? $_POST['data'][5] : null;
         $strStatus = $strBtn == 'btnIgnore' ? -2 : 1;
-        
+        // var_dump($_POST);
+		// die;
+		
         if ($strAction == '_listSubscriptions') {
             $strTable = 'channels';
         } elseif ($strAction == '_listPlaylists') {
@@ -733,30 +778,32 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
         } elseif ($strAction == '_listVideos') {
             $strTable = 'videos';
         }
-        
-        
+		
         $arrVideoId = [];
         $i = 0;
 		
         foreach ($_POST['data'][2] as $key => $isChecked) {
+			$sql = '';
+			
             if ($strBtn == 'btnSort') {
                 $strSort = $key + 1;
                 $sql = "UPDATE $strTable SET sort=\"{$strSort}\" WHERE id = \"{$_POST['data'][3][$key]}\";";
-                // var_dump($sql);
-				$i++;
-                $stmt = $pdo->prepare($sql);
-                $stmt->execute();
             } elseif ($isChecked == 1) {
                 if ($strBtn == 'btnPlaylist') {
                     $arrVideoId[] = $_POST['data'][3][$key];
-                } else {
+                } elseif ($strBtn == 'btnType') {
+					$sql = "UPDATE $strTable SET type=\"{$strType}\" WHERE id = \"{$_POST['data'][3][$key]}\";";
+				} else {
                     $sql = "UPDATE $strTable SET status=\"$strStatus\" WHERE id = \"{$_POST['data'][3][$key]}\";";
-					$i++;
-                    // var_dump($sql);
-                    $stmt = $pdo->prepare($sql);
-                    $stmt->execute();
                 }
             }
+			
+			if ($sql !== '') {
+				$i++;
+				// var_dump($sql);
+				$stmt = $pdo->prepare($sql);
+				$stmt->execute();
+			}
         }
         
         if (isset($strPlaylist)) {
@@ -787,6 +834,8 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
         
         if ($strBtn == 'btnSort') {
             $htmlBody .= "Upated $strTable Order ($i).<br>";
+        } elseif ($strBtn == 'btnType') {
+            $htmlBody .= "Upated $strTable Type ($i).<br>";
         } elseif (count($arrVideoId) > 0) {
             $htmlBody .= "Inserted " . count($arrVideoId) . " videos into playlist.<br>";
         } else {
@@ -799,7 +848,6 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
     die;
 }
 ?>
-
 <!doctype html>
 <html>
 	<head>
@@ -831,16 +879,18 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 	</head>
 	<body>
 		<a href="?">Home</a> | 
-		List: <a href="?action=_listSubscriptions">Subscriptions</a> | 
-		<a href="?action=_listPlaylists">Playlists</a> | 
-		<a href="?action=_listVideos">Videos</a>  | 
-		<a href="?action=_listVideos&type=music">Music</a> -- 
-		Update: <a href="?action=_updateSubscriptions">Upd Subscriptions</a> | 
-		<a href="?action=_updatePlaylists">Upd Playlists</a> | 
-		<a href="?action=_updatePlaylistsDetails">Upd Playlists Details</a> | 
-		<a href="?action=_updatePlaylistsDetails&type=music">Upd MUSIC Playlists Details</a> | 
-		<a href="?action=_updateVideos">Upd Videos</a> | 
-		<a href="?action=_updateVideosDetails">Upd Videos Details</a>
+		List: <a href="?action=_listSubscriptions">🔖Subscriptions</a> | 
+		<a href="?action=_listPlaylists">🔀Playlists</a> | 
+		<a href="?action=_listVideos">📺Videos</a>  | 
+		<a href="?action=_listVideos&type=music">🎵Music</a>
+		<br />		
+		Update: <a href="?action=_updateSubscriptions">🔖Upd Subscriptions</a> | 
+		<a href="?action=_updatePlaylists">🔀Upd Playlists</a> | 
+		<a href="?action=_updatePlaylistsDetails">🔂Upd Pl. Details</a> | 
+		<a href="?action=_updatePlaylistsDetails&type=video">🔂📺Upd VIDEO Pl. Details</a> | 
+		<a href="?action=_updatePlaylistsDetails&type=music">🔂🎵Upd MUSIC Pl. Details</a> | 
+		<a href="?action=_updateVideos">📖Upd Tracks</a> | 
+		<a href="?action=_updateVideosDetails">📄Upd Tracks Details</a>
 		<br>
 		<?=$htmlBody?>
 		<?php
@@ -855,6 +905,34 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
             if (in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos'])) {
                 ?>
 			<div class="pager">
+				Filters:
+				<select id="selFilter">
+					<option value="">-----</option>
+					<option value="1">Prime</option>
+					<option value="2">Prime Short</option>
+					<option value="3">Bob</option>
+					<option value="4">Zera</option>
+					<option value="5">gamers|humor</option>
+					<option value="6">education|technologies</option>
+					<option value="7">gaming|zap|fun</option>
+					<option value="8">Podcast: health|philo|documentary</option>
+					<option value="9">Asia|travel|art</option>
+					<option value="10">fiction</option>
+					<option value="11">TV / Radio|streaming</option>
+					<option value="12">friends</option>
+					<option value="13">Very Short</option>
+					<option value="14">Medium</option>
+					<option value="15">Long</option>
+					<option value="16">MUSIC Electro</option>
+					<option value="17">MUSIC Dance</option>
+					<option value="18">MUSIC Rock / Pop</option>
+					<option value="19">MUSIC France</option>
+					<option value="20">MUSIC Other</option>
+					<option value="21">MUSIC live</option>
+					<option value="22">MUSIC bad length</option>
+					<option value="99">Clear all</option>
+				</select>
+				|
 				Page: <select class="gotoPage"></select>
 				<img src="img/icons/first.png" class="first" alt="First" title="First page" />
 				<img src="img/icons/prev.png" class="prev" alt="Prev" title="Previous page" />
@@ -866,17 +944,20 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 					<option value="100">100</option>
 					<option value="200">200</option>
 					<option value="500">500</option>
-				</select> | 
+				</select>
+				<br />
 				<input type='checkbox' id='checkAll' /> Check All 
 				<button type="button" id="btnIgnore" class="download">Hide selected</button>
 				<button type="button" id="btnUnignore" class="download">Show selected</button>
+				<?=$htmlSelect;?>
 				<?php
                 if (in_array($action, ['_listSubscriptions', '_listPlaylists'])) {
                     ?>
 				<button type="button" id="btnSort" class="download">Save order</button>
+				<button type="button" id="btnType" class="download">Save checked to type</button>
 				<?php
                 } elseif ($action == '_listVideos') {
-                    echo $htmlSelect; ?>
+                ?>
 				<button type="button" id="btnPlaylist" class="download">Save checked to playlist</button>
 				<?php
                 } ?>

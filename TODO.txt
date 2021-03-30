@@ -1,13 +1,19 @@
-message: added videos, rating: separate added from updated.
-playlists externes ajoutées à ma librairie
+TODO:
+DB: ability tot sort types.
 table: load data with ajax.
-bug? liked video not updated in DB
+table: refresh after action.
+DB: store and edit filter rules.
 update videos from my playlists : only after last checked.
-bug: updates do not take all entries, maybe 49 instead of 50?
-for each element already in database: check if deleted
-js: show loader while waiting ajax response
-check if video not blocked on yt music
+message: added videos, rating: separate inserted from updated.
+bug? updates do not take all entries, maybe 49 instead of 50?
+for each element already in database: check if deleted. if yes, add flag.
 --
+LATER:
+longer session (prevent 401).
+?DB: my playlists, field: is_watch_later? tags? or add weigth?
+?DB: videos: get details for id already in database?
+PHP main: check API instead of a big try catch.
+show thumbs, extended cells on click
 Laravel + Vue.js
 --
 DB: videos: add views
@@ -17,33 +23,6 @@ DB: videos: add views
 		"dislikeCount": "1867",
 		"favoriteCount": "0",
 		"commentCount": "17190"
---
-longer session (prevent 401).
-table: refresh after action.
-table: manage half-width window: padding, spacing, min or fixed width.
-?DB: my playlists, field: is_watch_later? tags? or add weigth?
-?DB: videos: get details for id already in database?
---
-Get new videos from notifications or with full bell
-PHP main: check API instead of a big try catch.
-show thumbs, extended cells on click
------------
-créer règles :
-- ordre d'importance des règles
-- include / exclude (NOT, OR, AND)
-- chaine
-- durée
-- titre
-- date
---------
-LATER:
-/*
-best of:
-zerator
-moman
-gius
-mistermv 
-*/
 ------------
 DONE:
 0- manage auth with cookie
@@ -86,3 +65,18 @@ bug: only few videos listed
 bug: update videos and videos details never finishes.
 bug: list videos: do not show if in playlist.
 séparer update vidéo et my playlists.
+playlists externes ajoutées à ma librairie
+bug? liked video not updated in DB -> YTM audio only <> track id than video clips.
+check if video not blocked on yt music
+js: show loader while waiting ajax response
+table: manage half-width window: padding, spacing, min or fixed width.
+best of: zerator, moman, gius, mistermv 
+créer règles :
+- ordre d'importance des règles
+- include / exclude (NOT, OR, AND)
+- chaine
+- durée
+- titre
+- date
+?Get new videos from notifications or with full bell
+table and filter : add types
