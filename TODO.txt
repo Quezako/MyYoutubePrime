@@ -1,8 +1,9 @@
 TODO:
-DB: ability tot sort types.
+save and restore all input state with cookies.
+filter: add column sorting
+DB: ability to sort types.
 table: load data with ajax.
 table: refresh after action.
-DB: store and edit filter rules.
 update videos from my playlists : only after last checked.
 message: added videos, rating: separate inserted from updated.
 bug? updates do not take all entries, maybe 49 instead of 50?
@@ -80,3 +81,4 @@ créer règles :
 - date
 ?Get new videos from notifications or with full bell
 table and filter : add types
+DB: store and edit filter rules.

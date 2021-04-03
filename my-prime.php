@@ -111,6 +111,9 @@ if ($client->getAccessToken()) {
             case '_updateMusicPlaylistsDetails':
                 _updateMusicPlaylistsDetails($service, $pdo, $htmlBody, $myChannelId);
                 break;
+            case '_updateAll':
+                _updateAll($service, $pdo, $htmlBody, $myChannelId);
+                break;
             case '_ajaxUpdate':
                 _ajaxUpdate($service, $pdo, $htmlBody);
                 break;
@@ -164,18 +167,17 @@ function _getMyChannelId($service, &$myChannelId)
     ];
 
     $rspMyChannel = $service->channels->listChannels('id', $queryParams);
-    $myChannelId = $rspMyChannel[0]->id;
+	
+	if ($_COOKIE['radio_music'] == '{"checked":true}') {
+		$myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
+	} else {
+		$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
+	}
 }
 
 function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId, &$htmlSelect)
 {
-	$intType = 1;
-	
-	if ($myChannelId == 'UCjp4sUlXfWngnLyPfA5SrIQ') {
-		$intType = 2;
-	}
-	
-	$sql = "SELECT * FROM channel_types WHERE type = $intType";
+	$sql = "SELECT * FROM channel_types WHERE account = '$myChannelId'";
     // var_dump($sql);
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
@@ -192,7 +194,7 @@ function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId, &$htmlSel
     $sql = <<<END
 SELECT channels.*, channel_types.label FROM channels 
 LEFT JOIN channel_types ON channels.type = channel_types.id 
-WHERE my_channel_id = '$myChannelId' 
+WHERE channels.account = '$myChannelId' 
 -- AND channels.type IS NULL
 ORDER BY sort ASC
 LIMIT 300;
@@ -223,7 +225,7 @@ END;
     
     $htmlTableBody = implode('', $arrTable);
     $htmlTable = <<<END
-	<table id="tblSubs">
+	<table id="tblSubs_$myChannelId">
 		<thead>
 			<tr>
 				<th class="group-word"><input type='checkbox' id='checkAll' /> Action</th>
@@ -243,7 +245,7 @@ END;
 
 function _listPlaylists($service, $pdo, &$htmlTable, $myChannelId)
 {
-    $sql = "SELECT * FROM playlists WHERE my_channel_id = '$myChannelId' ORDER BY sort ASC LIMIT 200";
+    $sql = "SELECT * FROM playlists WHERE account = '$myChannelId' ORDER BY sort ASC LIMIT 200";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannels = $stmt->fetchAll();
@@ -263,7 +265,7 @@ END;
     
     $htmlTableBody = implode('', $arrTable);
     $htmlTable = <<<END
-	<table id="tblPlaylists">
+	<table id="tblPlaylists_$myChannelId">
 		<thead>
 			<tr>
 				<th class="group-word"><input type='checkbox' id='checkAll' /> Action</th>
@@ -281,21 +283,13 @@ END;
 
 function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId)
 {
-	if ($myChannelId == '') {
-		if (isset($_GET['type']) && $_GET['type'] == 'music') {
-			$myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
-		} else {
-			$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
-		}
-	}
-	
     $sql = <<<END
 	SELECT 
 		videos.*, channel_types.label, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
 		playlists.name AS my_playlist_name, channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
 	FROM videos 
-	LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.my_channel_id = '$myChannelId'
-	INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.my_channel_id = '$myChannelId'
+	LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
+	INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
 	LEFT JOIN channel_types ON channels.type = channel_types.id 
 	WHERE channels.status > 0 
 		AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL) 
@@ -312,10 +306,6 @@ END;
     $arrTable = [];
     
     foreach ($resChannels as $row) {
-		// $type = $row['type'];
-		// if ($type !== null) {
-			// $type = sprintf('%02d', $row['type']);	
-		// }
 		$row['date_published'] = substr($row['date_published'], 0, 10);
         
         $arrTable[] = <<<END
@@ -333,7 +323,7 @@ END;
     
     $htmlTableBody = implode('', $arrTable);
     $htmlTable = <<<END
-	<table id="tblVideos">
+	<table id="tblTracks_$myChannelId">
 		<thead>
 			<tr>
 				<th class="group-word">Action</th>
@@ -352,7 +342,7 @@ END;
 END;
 
     // select list: playlists.
-    $sql = "SELECT id, name FROM playlists WHERE my_channel_id = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+    $sql = "SELECT id, name FROM playlists WHERE account = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannels = $stmt->fetchAll();
@@ -405,12 +395,12 @@ function _updateSubscriptions($service, $pdo, &$htmlBody, $myChannelId)
     
     foreach ($arrMySubscriptions as $mySubscriptionId => $mySubscription) {
         $sql = <<<END
-	INSERT INTO channels (id, name, playlist_id, my_channel_id) 
+	INSERT INTO channels (id, name, playlist_id, account) 
 	VALUES ("$mySubscriptionId", "{$mySubscription['title']}", "{$mySubscription['uploads']}", "$myChannelId")
 	ON CONFLICT(id) DO UPDATE SET 
 	name = "{$mySubscription['title']}",
 	playlist_id = "{$mySubscription['uploads']}",
-	my_channel_id = "$myChannelId"
+	account = "$myChannelId"
 	WHERE id="$mySubscriptionId";
 END;
         $stmt = $pdo->prepare($sql);
@@ -448,12 +438,12 @@ function _updatePlaylists($service, $pdo, &$htmlBody, $myChannelId)
     
     foreach ($arrMyPlaylists as $myPlaylistId => $myPlaylist) {
         $sql = <<<END
-	INSERT OR IGNORE INTO playlists (id, name, my_channel_id) 
+	INSERT OR IGNORE INTO playlists (id, name, account) 
 	VALUES ("$myPlaylistId", "{$myPlaylist['title']}", "{$myPlaylist['channel']}")
 	ON CONFLICT(id) DO 
 	UPDATE SET
 	name = "{$myPlaylist['title']}",
-	my_channel_id = "{$myPlaylist['channel']}"
+	account = "{$myPlaylist['channel']}"
 	WHERE id="$myPlaylistId";
 END;
         $stmt = $pdo->prepare($sql);
@@ -467,13 +457,14 @@ function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId)
 {
     $arrVideos = [];
     
-	if (isset($_GET['type']) && $_GET['type'] == 'music') {
+	if ($myChannelId == 'UCjp4sUlXfWngnLyPfA5SrIQ') {
 		$sql = <<<END
 SELECT id FROM playlists 
 WHERE id = 'PLPjkJ-eKlc2yp5mv6wuVo_UfhT2ZsZk5m' 
 OR id = 'PLPjkJ-eKlc2zjByQjtI1M8ELC8TBeb2DN';
+OR id = 'PLPjkJ-eKlc2z1Hf-JY3WRmTUUGlMkGav6';
 END;
-	} elseif (isset($_GET['type']) && $_GET['type'] == 'video') {
+	} else {
 		$sql = <<<END
 SELECT id FROM playlists 
 WHERE id = 'PL52YqI0PbEYU1_3bne33bXQYAviFN8AD4'
@@ -484,9 +475,10 @@ OR id = 'PL52YqI0PbEYV_g-5wdATX6GV7QPXvPadH'
 OR id = 'PL52YqI0PbEYUxtItqu6WAIqj1C7hX4LUL'
 OR id = 'PL52YqI0PbEYXzJuYKJFyCCu1lREuoMhnO';
 END;
-	} else {
-		$sql = "SELECT id FROM playlists WHERE my_channel_id = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
 	}
+	// else {
+		// $sql = "SELECT id FROM playlists WHERE account = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+	// }
     
     // var_dump($sql);
 	// die;
@@ -503,7 +495,6 @@ END;
 				'pageToken' => $pageToken,
 				'playlistId' => $myPlaylist['id']
 			];
-			
 			// var_dump($queryParams);
             
 			try {
@@ -551,8 +542,8 @@ function _updateVideos($service, $pdo, &$htmlBody, $myChannelId)
 {
     $now = date_create();
     
-    $sql = "SELECT playlist_id FROM channels WHERE my_channel_id = '$myChannelId' AND status = 1;";
-    // $sql = "SELECT playlist_id FROM channels WHERE my_channel_id = '$myChannelId' AND status = 1 AND sort < 50;";
+    $sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND status = 1;";
+    // $sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND status = 1 AND sort < 50;";
     // var_dump($sql);
 	// die;
     $stmt = $pdo->prepare($sql);
@@ -563,7 +554,7 @@ function _updateVideos($service, $pdo, &$htmlBody, $myChannelId)
 SELECT * FROM (
 	SELECT videos.playlist_id, videos.date_checked 
 	FROM videos
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.my_channel_id = '$myChannelId' 
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
 	ORDER BY videos.date_checked DESC
 ) GROUP BY playlist_id;
 END;
@@ -615,7 +606,7 @@ END;
 				];
 				
 				$numItems++;
-				echo $row['playlist_id'] . ': ' . $video->snippet->resourceId->videoId . '<br />';
+				// echo $row['playlist_id'] . ': ' . $video->snippet->resourceId->videoId . '<br />';
 			}
 			
 			if ($numItems > 200) {
@@ -642,9 +633,9 @@ END;
             $stmt->execute();
         }
         
-        $htmlBody .= 'Added videos: ' . count($arrVideos);
+        $htmlBody .= 'Added videos: ' . count($arrVideos).'<br>';
     } else {
-        $htmlBody .= 'Videos up to date.';
+        $htmlBody .= 'Videos up to date.<br>';
     }
 }
 
@@ -658,7 +649,7 @@ function _updateVideosDetails($service, $pdo, &$htmlBody, $myChannelId)
     
     $sql = <<<END
 	SELECT videos.id FROM videos 
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.my_channel_id = '$myChannelId' 
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
 	WHERE (my_playlist_id = 0 OR my_playlist_id IS NULL);
 END;
 	// var_dump($sql);
@@ -701,7 +692,7 @@ END;
     
     $sql = <<<END
 	SELECT videos.id FROM videos
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.my_channel_id = '$myChannelId' 
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
 	WHERE duration IS NULL LIMIT 1000;
 END;
     $stmt = $pdo->prepare($sql);
@@ -756,6 +747,13 @@ END;
     } else {
         $htmlBody .= 'Videos duration up to date.<br>';
     }
+}
+
+function _updateAll($service, $pdo, &$htmlBody, $myChannelId)
+{
+	_updatePlaylistsDetails($service, $pdo, $htmlBody, $myChannelId);
+	_updateVideos($service, $pdo, $htmlBody, $myChannelId);
+	_updateVideosDetails($service, $pdo, $htmlBody, $myChannelId);
 }
 
 function _ajaxUpdate($service, $pdo, &$htmlBody)
@@ -873,22 +871,24 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 		<!-- DRAG -->
 		<script src="js/jquery-ui.min.js"></script>
 		
+		<!-- COOKIES -->
+		<script src="js/js.cookie-2.2.1.min.js"></script>
+		
 		<!-- My Prime -->
 		<link href="css/my-prime.css" rel="stylesheet">
 		<script src="js/my-prime.js"></script>
 	</head>
 	<body>
+		<input type="radio" name="account" id="video" value="video" /> Video <input type="radio" name="account" id="music" value="music" /> Music | 
 		<a href="?">Home</a> | 
 		List: <a href="?action=_listSubscriptions">🔖Subscriptions</a> | 
 		<a href="?action=_listPlaylists">🔀Playlists</a> | 
-		<a href="?action=_listVideos">📺Videos</a>  | 
-		<a href="?action=_listVideos&type=music">🎵Music</a>
+		<a href="?action=_listVideos">📖Tracks</a>
 		<br />		
 		Update: <a href="?action=_updateSubscriptions">🔖Upd Subscriptions</a> | 
 		<a href="?action=_updatePlaylists">🔀Upd Playlists</a> | 
+		<a href="?action=_updateAll">🔂Upd ALL</a> | 
 		<a href="?action=_updatePlaylistsDetails">🔂Upd Pl. Details</a> | 
-		<a href="?action=_updatePlaylistsDetails&type=video">🔂📺Upd VIDEO Pl. Details</a> | 
-		<a href="?action=_updatePlaylistsDetails&type=music">🔂🎵Upd MUSIC Pl. Details</a> | 
 		<a href="?action=_updateVideos">📖Upd Tracks</a> | 
 		<a href="?action=_updateVideosDetails">📄Upd Tracks Details</a>
 		<br>
@@ -908,29 +908,17 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 				Filters:
 				<select id="selFilter">
 					<option value="">-----</option>
-					<option value="1">Prime</option>
-					<option value="2">Prime Short</option>
-					<option value="3">Bob</option>
-					<option value="4">Zera</option>
-					<option value="5">gamers|humor</option>
-					<option value="6">education|technologies</option>
-					<option value="7">gaming|zap|fun</option>
-					<option value="8">Podcast: health|philo|documentary</option>
-					<option value="9">Asia|travel|art</option>
-					<option value="10">fiction</option>
-					<option value="11">TV / Radio|streaming</option>
-					<option value="12">friends</option>
-					<option value="13">Very Short</option>
-					<option value="14">Medium</option>
-					<option value="15">Long</option>
-					<option value="16">MUSIC Electro</option>
-					<option value="17">MUSIC Dance</option>
-					<option value="18">MUSIC Rock / Pop</option>
-					<option value="19">MUSIC France</option>
-					<option value="20">MUSIC Other</option>
-					<option value="21">MUSIC live</option>
-					<option value="22">MUSIC bad length</option>
-					<option value="99">Clear all</option>
+					<?php
+					// select list: playlists.
+					$sql = "SELECT * FROM filters WHERE account = '$myChannelId'";
+					$stmt = $pdo->prepare($sql);
+					$stmt->execute();
+					$resChannels = $stmt->fetchAll();
+					
+					foreach ($resChannels as $row) {
+						echo "<option value=\"{$row["rules"]}^{$row["playlist"]}\">{$row["label"]}</option>";
+					}
+					?>
 				</select>
 				|
 				Page: <select class="gotoPage"></select>
@@ -944,6 +932,7 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 					<option value="100">100</option>
 					<option value="200">200</option>
 					<option value="500">500</option>
+					<option value="1000">1000</option>
 				</select>
 				<br />
 				<input type='checkbox' id='checkAll' /> Check All 
