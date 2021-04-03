@@ -7,7 +7,7 @@ $(function() {
 		cssGoto: '.gotoPage'
 	};
   
-	$('._listSubscriptions table, ._listPlaylists table, ._listVideos table').tablesorter({
+	$('table').tablesorter({
 		theme: 'bootstrap',
 		headers: {
 			0: { sorter: 'checkbox' },
@@ -25,11 +25,12 @@ $(function() {
 	
 	$('._listSubscriptions table, ._listPlaylists table').sortable({ items: "tbody tr" });
 
-    $('#btnIgnore, #btnUnignore, #btnSort, #btnPlaylist').click(function() {
+    $('#btnIgnore, #btnUnignore, #btnSort, #btnPlaylist, #btnType').click(function() {
 		var arrId = [];
 		var arrChecked = [];
 		var action = getUrlParameter('action');
 		var strCol = (action == '_listVideos') ? '3' : '2';
+		$('#status').html('loading...');
 
  		$('.odd, .even').each(function() {
 			strHref = $(this).find('td:nth-child(' + strCol + ')').find('a').attr('href');
@@ -49,6 +50,7 @@ $(function() {
 			arrChecked,
 			arrId,
 			$('#selPlaylist option:selected').val(),
+			$('#selChannelTypes option:selected').val(),
 		];
 
 		$.ajax({
@@ -80,4 +82,29 @@ $(function() {
 			}
 		}
 	};
+	
+	$('#selFilter').change(function() {
+		console.log(this.value);
+		arrSel = this.value.split("^");
+		$('table').trigger('search', [ arrSel[0].split(",") ]);
+		$('#selPlaylist').val(arrSel[1]);
+	});
+	
+	$('input[type=radio]').change(function() {
+		$('input[type=radio]').each(function(){
+			Cookies.set('radio_' + $(this).attr('id'), JSON.stringify({checked: this.checked}), { expires : 777 });
+			console.log('1: ' + $(this).attr('id') + '' + Cookies.get('radio_' + $(this).attr('id')));
+		});
+		location.reload(true);
+	});
+
+	// Save radio input state to local storage.
+	$(function(){
+		$('input[type=radio]').each(function(){
+			var state = JSON.parse(Cookies.get('radio_' + $(this).attr('id')));
+			console.log('2: ' + $(this).attr('id') + '' + Cookies.get('radio_' + $(this).attr('id')));
+			
+			if (state) this.checked = state.checked;
+		});
+	});
 });
