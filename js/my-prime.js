@@ -8,22 +8,21 @@ $(function() {
 		
         // css class names of pager arrows
         css: {
-          container   : 'tablesorter-pager',
-          errorRow    : 'tablesorter-errorRow', // error information row (don't include period at beginning)
-          disabled    : 'disabled'              // class added to arrows @ extremes (i.e. prev/first arrows "disabled" on first page)
+			container   : 'tablesorter-pager',
+			errorRow    : 'tablesorter-errorRow', // error information row (don't include period at beginning)
+			disabled    : 'disabled'              // class added to arrows @ extremes (i.e. prev/first arrows "disabled" on first page)
         },
 
         // jQuery selectors
         selectors: {
-          container   : '.pager',       // target the pager markup (wrapper)
-          first       : '.first',       // go to first page arrow
-          prev        : '.prev',        // previous page arrow
-          next        : '.next',        // next page arrow
-          last        : '.last',        // go to last page arrow
-          gotoPage    : '.gotoPage',    // go to page selector - select dropdown that sets the current page
-          pageDisplay : '.pagedisplay', // location of where the "output" is displayed
-          pageSize    : '.pagesize'     // page size selector - select dropdown that sets the "size" option
-
+			container   : '.pager',       // target the pager markup (wrapper)
+			first       : '.first',       // go to first page arrow
+			prev        : '.prev',        // previous page arrow
+			next        : '.next',        // next page arrow
+			last        : '.last',        // go to last page arrow
+			gotoPage    : '.gotoPage',    // go to page selector - select dropdown that sets the current page
+			pageDisplay : '.pagedisplay', // location of where the "output" is displayed
+			pageSize    : '.pagesize'     // page size selector - select dropdown that sets the "size" option
         },
 
         output: '{startRow} - {endRow} / {filteredRows} ({totalRows})',
@@ -126,7 +125,7 @@ $(function() {
 		var arrChecked = [];
 		var action = getUrlParameter('action');
 		var strCol = (action == '_listVideos') ? '3' : '2';
-		$('#status').html('loading...');
+		$('#status').html('<img src="img/download.gif" /> Loading...');
 
  		$('.odd, .even').each(function() {
 			strHref = $(this).find('td:nth-child(' + strCol + ')').find('a').attr('href');
@@ -161,7 +160,7 @@ $(function() {
 	});
 	
     $('#_updateSubscriptions, #_updatePlaylists, #_updateAll, #_updatePlaylistsDetails, #_updateVideos, #_updateVideosDetails').click(function() {
-		$('#status').html('loading...');
+		$('#status').html('<img src="img/download.gif" /> Loading...');
 		console.log(this.id);
 		$.ajax({
 			type: "GET",

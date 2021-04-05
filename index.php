@@ -10,7 +10,27 @@ ini_set('session.gc_maxlifetime', 30 * 24 * 60 * 60);
 session_set_cookie_params(30 * 24 * 60 * 60);
 session_start();
 
-$service = 'remove_me';
+if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
+    throw new \Exception('please run "composer require google/apiclient:~2.0" in "' . __DIR__ .'"');
+}
+
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/vendor/autoload.php';
+
+$client = new Google_Client();
+$client->setClientId($OAUTH2_CLIENT_ID);
+$client->setClientSecret($OAUTH2_CLIENT_SECRET);
+
+$client->setScopes('https://www.googleapis.com/auth/youtube');
+$redirect = filter_var((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[PHP_SELF]", FILTER_SANITIZE_URL);
+$client->setRedirectUri($redirect);
+
+$service = new Google_Service_YouTube($client);
+
+// Check if an auth token exists for the required scopes
+$tokenSessionKey = 'token-' . $client->prepareScopes();
+
+// $service = 'remove_me';
 $htmlBody = '';
 $htmlTable = '';
 $htmlSelect = '';
@@ -19,6 +39,20 @@ if (isset($_COOKIE['radio_music']) && $_COOKIE['radio_music'] == '{"checked":tru
 	$myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
 } else {
 	$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
+}
+
+if (isset($_GET['code'])) {
+    if (strval($_SESSION['state']) !== strval($_GET['state'])) {
+        die('The session state did not match.');
+    }
+
+    $client->authenticate($_GET['code']);
+    $_SESSION[$tokenSessionKey] = $client->getAccessToken();
+    header('Location: ' . $redirect);
+}
+
+if (isset($_SESSION[$tokenSessionKey])) {
+    $client->setAccessToken($_SESSION[$tokenSessionKey]);
 }
 
 // SQLite.
@@ -31,18 +65,87 @@ try {
     die();
 }
 
-// Check to ensure that the access token was successfully acquired.
-if (isset($_GET['action'])) {
-	switch ($_GET['action']) {
-		case '_listSubscriptions':
-			_listSubscriptions($service, $pdo, $htmlTable, $myChannelId, $htmlSelect);
-			break;
-		case '_listPlaylists':
-			_listPlaylists($service, $pdo, $htmlTable, $myChannelId);
-			break;
-		case '_listVideos':
-			_listVideos($service, $pdo, $htmlTable, $htmlSelect, $myChannelId);
-			break;
+// Check to ensure that the access token was successfully acquired.// Check to ensure that the access token was successfully acquired.
+if ($client->getAccessToken()) {
+    try {
+        _getMyChannelId($service, $myChannelId);
+    } catch (Google_Service_Exception $e) {
+        echo sprintf(
+            '<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
+            ($e->getMessage())
+        );
+        
+        if (in_array($e->getCode(), [401])) {
+            _showAuth($client, $htmlBody);
+        }
+    } catch (Google_Exception $e) {
+        echo sprintf(
+            '<p>An Google_Exception error occurred: <code>%s</code></p>',
+            ($e->getMessage())
+        );
+    } catch (Exception $e) {
+        echo sprintf(
+            '<p>An Exception error occurred: <code>%s</code></p>',
+            ($e->getMessage())
+        );
+    }
+	
+	if (isset($_GET['action'])) {
+		switch ($_GET['action']) {
+			case '_listSubscriptions':
+				_listSubscriptions($service, $pdo, $htmlTable, $myChannelId, $htmlSelect);
+				break;
+			case '_listPlaylists':
+				_listPlaylists($service, $pdo, $htmlTable, $myChannelId);
+				break;
+			case '_listVideos':
+				_listVideos($service, $pdo, $htmlTable, $htmlSelect, $myChannelId);
+				break;
+		}
+	}
+	
+    $_SESSION[$tokenSessionKey] = $client->getAccessToken();
+} elseif ($OAUTH2_CLIENT_ID == 'REPLACE_ME') {
+    echo <<<END
+	<h3>Client Credentials Required</h3>
+	<p>
+		You need to set <code>\$OAUTH2_CLIENT_ID</code> and
+		<code>\$OAUTH2_CLIENT_ID</code> before proceeding.
+	<p>
+END;
+} else {
+    _showAuth($client, $htmlBody);
+}
+
+
+function _showAuth($client, &$htmlBody)
+{
+    // If the user hasn't authorized the app, initiate the OAuth flow
+    $state = mt_rand();
+    $client->setState($state);
+    $_SESSION['state'] = $state;
+
+    $authUrl = $client->createAuthUrl();
+    echo <<<END
+	<h3>Authorization Required</h3>
+	<p>You need to <a href="$authUrl">authorize access</a> before proceeding.<p>
+END;
+
+    header('Location: ' . $authUrl);
+}
+
+function _getMyChannelId($service, &$myChannelId)
+{
+    $queryParams = [
+        'mine' => true
+    ];
+
+    $rspMyChannel = $service->channels->listChannels('id', $queryParams);
+	
+	if (isset($_COOKIE['radio_music']) && $_COOKIE['radio_music'] == '{"checked":true}') {
+		$myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
+	} else {
+		$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
 	}
 }
 
@@ -191,7 +294,8 @@ END;
 		<button type="button" id="_updatePlaylistsDetails" class="download">🔂Upd Pl. Details</button>  | 
 		<button type="button" id="_updateVideos" class="download">📖Upd Tracks</button>  | 
 		<button type="button" id="_updateVideosDetails" class="download">📄Upd Tracks Details</button> 
-		<br>
+		<br />
+		<div id='status' style="background:#333;padding:4px;margin:5px;">Ready.</div>
 		<?=$htmlBody?>
 		<?php
         if (isset($_GET['action'])) {
@@ -250,7 +354,6 @@ END;
 				<button type="button" id="btnPlaylist" class="download">Save checked to playlist</button>
 				<?php
                 } ?>
-				<span id='status'></span>
 			</div>
 			
 			<?php

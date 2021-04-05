@@ -8,17 +8,18 @@ ini_set("xdebug.var_display_max_children", '-1');
 ini_set("xdebug.var_display_max_data", '-1');
 ini_set("xdebug.var_display_max_depth", '-1');
 
+// server should keep session data for AT LEAST x seconds.
+ini_set('session.gc_maxlifetime', 30 * 24 * 60 * 60);
+// each client should remember their session id for EXACTLY x seconds.
+session_set_cookie_params(30 * 24 * 60 * 60);
+session_start();
+
 if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
     throw new \Exception('please run "composer require google/apiclient:~2.0" in "' . __DIR__ .'"');
 }
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/vendor/autoload.php';
-// server should keep session data for AT LEAST x seconds.
-ini_set('session.gc_maxlifetime', 30 * 24 * 60 * 60);
-// each client should remember their session id for EXACTLY x seconds.
-session_set_cookie_params(30 * 24 * 60 * 60);
-session_start();
 
 $client = new Google_Client();
 $client->setClientId($OAUTH2_CLIENT_ID);
@@ -32,6 +33,7 @@ $service = new Google_Service_YouTube($client);
 
 // Check if an auth token exists for the required scopes
 $tokenSessionKey = 'token-' . $client->prepareScopes();
+
 $htmlBody = '';
 $htmlTable = '';
 $htmlSelect = '';
@@ -149,17 +151,6 @@ END;
     header('Location: ' . $authUrl);
 }
 
-function _covtime($youtube_time)
-{
-    if ($youtube_time) {
-        $start = new DateTime('@0'); // Unix epoch
-        $start->add(new DateInterval($youtube_time));
-        $youtube_time = round($start->getTimestamp() / 60, 0);
-    }
-    
-    return $youtube_time;
-}
-
 function _getMyChannelId($service, &$myChannelId)
 {
     $queryParams = [
@@ -173,6 +164,17 @@ function _getMyChannelId($service, &$myChannelId)
 	} else {
 		$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
 	}
+}
+
+function _covtime($youtube_time)
+{
+    if ($youtube_time) {
+        $start = new DateTime('@0'); // Unix epoch
+        $start->add(new DateInterval($youtube_time));
+        $youtube_time = round($start->getTimestamp() / 60, 0);
+    }
+    
+    return $youtube_time;
 }
 
 function _list($pdo, $myChannelId)
@@ -199,8 +201,9 @@ function _list($pdo, $myChannelId)
 			"channel_types.label",
 		];
 		$sqlCount = <<<END
-SELECT count(*) AS count FROM $table 
-WHERE $table.account = '$myChannelId'
+SELECT count(*) AS count
+FROM channels
+WHERE channels.account = '$myChannelId'
 END;
 		$sql = <<<END
 SELECT channels.*, channel_types.label 
@@ -223,8 +226,9 @@ END;
 			"sort",
 		];
 		$sqlCount = <<<END
-SELECT count(*) AS count FROM $table 
-WHERE $table.account = '$myChannelId'
+SELECT count(*) AS count
+FROM playlists
+WHERE playlists.account = '$myChannelId'
 END;
 		$sql = <<<END
 SELECT * 
@@ -254,7 +258,8 @@ END;
 			"channel_types.label",
 		];
 		$sqlCount = <<<END
-SELECT count(*) AS count FROM $table 
+SELECT count(*) AS count
+FROM videos 
 INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
 LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
 LEFT JOIN channel_types ON channels.type = channel_types.id 
@@ -297,7 +302,7 @@ END;
 				}
 			} else {
 				$arrFilter = explode("|", $filter);
-				$strFilter = " AND {$arrFields[$key]} LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%'";
+				$strFilter .= " AND ({$arrFields[$key]} LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%')";
 			}
 		}
 	}
@@ -841,7 +846,7 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
         }
         
         if (isset($strPlaylist)) {
-            var_dump($strPlaylist);
+            // var_dump($strPlaylist);
             $arrReversedVideoId = array_reverse($arrVideoId);
             $playlistItem = new Google_Service_YouTube_PlaylistItem();
             $playlistItemSnippet = new Google_Service_YouTube_PlaylistItemSnippet();
@@ -850,7 +855,6 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
             $resourceId->setKind('youtube#video');
             
             foreach ($arrReversedVideoId as $videoId) {
-				// var_dump($videoId);
                 $resourceId->setVideoId($videoId);
                 $playlistItemSnippet->setResourceId($resourceId);
                 $playlistItem->setSnippet($playlistItemSnippet);
@@ -862,7 +866,6 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 				} catch (Exception $e) {
 					echo "can't find video_id: {$videoId}<br>";
 				}
-                // break;
             }
         }
         
