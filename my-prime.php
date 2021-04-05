@@ -1,8 +1,12 @@
 <?php
+// header('Content-Type: application/json');
 error_reporting(E_ALL);
 ini_set("display_errors", 1);
 ini_set('max_execution_time', 300); //300 seconds = 5 minutes
 set_time_limit(300);
+ini_set("xdebug.var_display_max_children", '-1');
+ini_set("xdebug.var_display_max_data", '-1');
+ini_set("xdebug.var_display_max_depth", '-1');
 
 if (!file_exists(__DIR__ . '/vendor/autoload.php')) {
     throw new \Exception('please run "composer require google/apiclient:~2.0" in "' . __DIR__ .'"');
@@ -62,7 +66,7 @@ if ($client->getAccessToken()) {
     try {
         _getMyChannelId($service, $myChannelId);
     } catch (Google_Service_Exception $e) {
-        $htmlBody .= sprintf(
+        echo sprintf(
             '<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
             ($e->getMessage())
         );
@@ -71,27 +75,23 @@ if ($client->getAccessToken()) {
             _showAuth($client, $htmlBody);
         }
     } catch (Google_Exception $e) {
-        $htmlBody .= sprintf(
+        echo sprintf(
             '<p>An Google_Exception error occurred: <code>%s</code></p>',
             ($e->getMessage())
         );
     } catch (Exception $e) {
-        $htmlBody .= sprintf(
+        echo sprintf(
             '<p>An Exception error occurred: <code>%s</code></p>',
             ($e->getMessage())
         );
     }
-
+	
     if (isset($_GET['action'])) {
         switch ($_GET['action']) {
             case '_listSubscriptions':
-                _listSubscriptions($service, $pdo, $htmlTable, $myChannelId, $htmlSelect);
-                break;
             case '_listPlaylists':
-                _listPlaylists($service, $pdo, $htmlTable, $myChannelId);
-                break;
             case '_listVideos':
-                _listVideos($service, $pdo, $htmlTable, $htmlSelect, $myChannelId);
+                _list($pdo, $myChannelId);
                 break;
             case '_updateSubscriptions':
                 _updateSubscriptions($service, $pdo, $htmlBody, $myChannelId);
@@ -119,10 +119,10 @@ if ($client->getAccessToken()) {
                 break;
         }
     }
-        
+	
     $_SESSION[$tokenSessionKey] = $client->getAccessToken();
 } elseif ($OAUTH2_CLIENT_ID == 'REPLACE_ME') {
-    $htmlBody .= <<<END
+    echo <<<END
 	<h3>Client Credentials Required</h3>
 	<p>
 		You need to set <code>\$OAUTH2_CLIENT_ID</code> and
@@ -141,7 +141,7 @@ function _showAuth($client, &$htmlBody)
     $_SESSION['state'] = $state;
 
     $authUrl = $client->createAuthUrl();
-    $htmlBody .= <<<END
+    echo <<<END
 	<h3>Authorization Required</h3>
 	<p>You need to <a href="$authUrl">authorize access</a> before proceeding.<p>
 END;
@@ -168,36 +168,175 @@ function _getMyChannelId($service, &$myChannelId)
 
     $rspMyChannel = $service->channels->listChannels('id', $queryParams);
 	
-	if ($_COOKIE['radio_music'] == '{"checked":true}') {
+	if (isset($_COOKIE['radio_music']) && $_COOKIE['radio_music'] == '{"checked":true}') {
 		$myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
 	} else {
 		$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
 	}
 }
 
-function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId, &$htmlSelect)
+function _list($pdo, $myChannelId)
 {
-	$sql = "SELECT * FROM channel_types WHERE account = '$myChannelId'";
-    // var_dump($sql);
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $resChannelTypes = $stmt->fetchAll();
-    
-    $htmlSelect = '<select name="selChannelTypes" id="selChannelTypes">';
-    
-    foreach ($resChannelTypes as $row) {
-        $htmlSelect .= "<option value='{$row["id"]}'>{$row["label"]}</option>";
-    }
-    
-    $htmlSelect .= '</select>';
+	$strFilter = '';
+	$arrSort = [];
 	
-    $sql = <<<END
-SELECT channels.*, channel_types.label FROM channels 
+	if ($_GET['action'] == '_listSubscriptions') {
+		$table = 'channels';
+		$arrHeaders = [
+			"Action",
+			"Channel",
+			"Uploads",
+			"Status",
+			"Sort",
+			"Type",
+		];
+		$arrFields = [
+			"id",
+			"name",
+			"name",
+			"status",
+			"sort",
+			"channel_types.label",
+		];
+		$sqlCount = <<<END
+SELECT count(*) AS count FROM $table 
+WHERE $table.account = '$myChannelId'
+END;
+		$sql = <<<END
+SELECT channels.*, channel_types.label 
+FROM channels 
 LEFT JOIN channel_types ON channels.type = channel_types.id 
 WHERE channels.account = '$myChannelId' 
--- AND channels.type IS NULL
-ORDER BY sort ASC
-LIMIT 300;
+END;
+	} elseif ($_GET['action'] == '_listPlaylists') {
+		$table = 'playlists';
+		$arrHeaders = [
+			"Action",
+			"Playlist",
+			"Status",
+			"Sort",
+		];
+		$arrFields = [
+			"id",
+			"name",
+			"status",
+			"sort",
+		];
+		$sqlCount = <<<END
+SELECT count(*) AS count FROM $table 
+WHERE $table.account = '$myChannelId'
+END;
+		$sql = <<<END
+SELECT * 
+FROM playlists 
+WHERE account = '$myChannelId' 
+-- ORDER BY sort ASC
+-- LIMIT 200;
+END;
+	} elseif ($_GET['action'] == '_listVideos') {
+		$table = 'videos';
+		$arrHeaders = [
+			"Action",
+			"Channel",
+			"Video",
+			"Duration",
+			"Priority",
+			"Published",
+			"Type",
+		];
+		$arrFields = [
+			"id",
+			"channels.name",
+			"title",
+			"duration",
+			"channels.sort",
+			"date_published",
+			"channel_types.label",
+		];
+		$sqlCount = <<<END
+SELECT count(*) AS count FROM $table 
+INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
+LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
+LEFT JOIN channel_types ON channels.type = channel_types.id 
+WHERE channels.status > 0 
+	AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL) 
+	AND (videos.status <> -2 OR videos.status IS NULL)
+END;
+		$sql = <<<END
+SELECT 
+	videos.*, channel_types.label, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
+	playlists.name AS my_playlist_name, channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
+FROM videos 
+INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
+LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
+LEFT JOIN channel_types ON channels.type = channel_types.id 
+WHERE channels.status > 0 
+	AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL) 
+	AND (videos.status <> -2 OR videos.status IS NULL)
+-- ORDER BY channel_sort ASC, SUBSTR(videos.date_published, 0, 8) DESC, CAST(duration AS INT) ASC
+-- LIMIT 1000;
+END;
+	}
+	
+	if (is_array($_GET['filter'])) {
+		foreach ($_GET['filter'] as $key => $filter) {
+			$strFilterType = substr($filter, 0, 1);
+				
+			if ($strFilterType === '<' || $strFilterType === '>') {
+				$arrFilter = explode(" and ", $filter);
+				
+				foreach ($arrFilter as $strFilterSplit) {
+					$strFilter .= " AND {$arrFields[$key]} $strFilterSplit";
+				}
+			} elseif ($strFilterType === '!') {
+				$filter = trim($filter,'!()');
+				$arrFilter = explode("|", $filter);
+				
+				foreach ($arrFilter as $strFilterSplit) {
+					$strFilter .= " AND {$arrFields[$key]} NOT LIKE '%$strFilterSplit%'";
+				}
+			} else {
+				$arrFilter = explode("|", $filter);
+				$strFilter = " AND {$arrFields[$key]} LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%'";
+			}
+		}
+	}
+	
+	if (is_array($_GET['column'])) {
+		foreach ($_GET['column'] as $key => $order) {
+			$order = $order == 0 ? 'ASC' : 'DESC';
+			$arrSort[] = "{$arrFields[$key]} $order";
+		}
+	}
+	
+	if (count($arrSort) == 0) {
+		$strSort = 'ORDER BY sort ASC';
+	} else {
+		$strSort = 'ORDER BY ' . implode(',', $arrSort);
+	}
+	
+	$sqlCount .= <<<END
+	
+$strFilter
+END;
+    // var_dump($sqlCount);
+    $stmt = $pdo->prepare($sqlCount);
+    $stmt->execute();
+    $resCount = $stmt->fetch();
+	
+	if ($_GET['size'] == 'all') {
+		$pageStart = 0;
+		$pageEnd = $resCount['count'];
+	} else {
+		$pageStart = $_GET['size'] * $_GET['page'];
+		$pageEnd = $_GET['size'] * ($_GET['page'] + 1);
+	}
+	
+	$sql .= <<<END
+	
+$strFilter
+$strSort
+LIMIT {$pageStart}, {$pageEnd};
 END;
     // var_dump($sql);
     $stmt = $pdo->prepare($sql);
@@ -207,153 +346,50 @@ END;
     $arrTable = [];
     
     foreach ($resChannels as $row) {
-		$type = $row['type'];
-		if ($type !== null) {
-			$type = sprintf('%02d', $row['type']);	
+		if ($table == 'channels') {
+			$type = $row['type'];
+			
+			if ($type !== null) {
+				$type = sprintf('%02d', $row['type']);	
+			}
+			
+			$arrTable[] = [
+				$arrHeaders[0] => "<input type='checkbox'>",
+				$arrHeaders[1] => "<a href='https://www.youtube.com/channel/{$row['id']}' target='_blank'>{$row['name']}</a>",
+				$arrHeaders[2] => "<a href='https://www.youtube.com/playlist?list={$row['playlist_id']}' target='_blank'>{$row['name']}</a>",
+				$arrHeaders[3] => "{$row['status']}",
+				$arrHeaders[4] => "{$row['sort']}",
+				$arrHeaders[5] => "{$type}-{$row['label']}",
+			];
+		} elseif ($table == 'playlists') {
+			$arrTable[] = [
+				$arrHeaders[0] => "<input type='checkbox'>",
+				$arrHeaders[1] => "<a href='https://www.youtube.com/playlist?list={$row['id']}' target='_blank'>{$row['name']}</a>",
+				$arrHeaders[2] => "{$row['status']}",
+				$arrHeaders[3] => "{$row['sort']}",
+			];
+		} elseif ($table == 'videos') {
+			$row['date_published'] = substr($row['date_published'], 0, 10);
+			
+			$arrTable[] = [
+				$arrHeaders[0] => "<input type='checkbox' />",
+				$arrHeaders[1] => "<a href='https://www.youtube.com/channel/{$row['channel_id']}' target='_blank'>{$row['channel_name']}</a>",
+				$arrHeaders[2] => "<a href='https://www.youtube.com/watch?v={$row['id']}' target='_blank'>{$row['title']}</a>",
+				$arrHeaders[3] => "{$row['duration']}",
+				$arrHeaders[4] => "{$row['channel_sort']}",
+				$arrHeaders[5] => "{$row['date_published']}",
+				$arrHeaders[6] => "{$row['label']}",
+			];
 		}
-        $arrTable[] = <<<END
-	<tr>
-		<td><input type='checkbox'></td>
-		<td><a href='https://www.youtube.com/channel/{$row['id']}' target='_blank'>{$row['name']}</a></td>
-		<td><a href='https://www.youtube.com/playlist?list={$row['playlist_id']}' target='_blank'>{$row['name']}</a></td>
-		<td>{$row['status']}</td>
-		<td>{$row['sort']}</td>
-		<td>{$type}-{$row['label']}</td>
-	</tr>
-END;
     }
-    
-    $htmlTableBody = implode('', $arrTable);
-    $htmlTable = <<<END
-	<table id="tblSubs_$myChannelId">
-		<thead>
-			<tr>
-				<th class="group-word"><input type='checkbox' id='checkAll' /> Action</th>
-				<th class="group-letter-1">Channel</th>
-				<th class="group-letter-1">Uploads</th>
-				<th class="group-date-month">Status</th>
-				<th class="group-date-month">Sort</th>
-				<th class="group-letter-1">Type</th>
-			</tr>
-		</thead>
-		<tbody>
-			$htmlTableBody
-		</tbody>
-	</table>
-END;
-}
-
-function _listPlaylists($service, $pdo, &$htmlTable, $myChannelId)
-{
-    $sql = "SELECT * FROM playlists WHERE account = '$myChannelId' ORDER BY sort ASC LIMIT 200";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $resChannels = $stmt->fetchAll();
-    
-    $arrTable = [];
-    
-    foreach ($resChannels as $row) {
-        $arrTable[] = <<<END
-	<tr>
-		<td><input type='checkbox'></td>
-		<td><a href='https://www.youtube.com/playlist?list={$row['id']}' target='_blank'>{$row['name']}</a></td>
-		<td>{$row['status']}</td>
-		<td>{$row['sort']}</td>
-	</tr>
-END;
-    }
-    
-    $htmlTableBody = implode('', $arrTable);
-    $htmlTable = <<<END
-	<table id="tblPlaylists_$myChannelId">
-		<thead>
-			<tr>
-				<th class="group-word"><input type='checkbox' id='checkAll' /> Action</th>
-				<th class="group-letter-1">Playlist</th>
-				<th class="group-date-month">Status</th>
-				<th class="group-date-month">Sort</th>
-			</tr>
-		</thead>
-		<tbody>
-			$htmlTableBody
-		</tbody>
-	</table>
-END;
-}
-
-function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId)
-{
-    $sql = <<<END
-	SELECT 
-		videos.*, channel_types.label, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
-		playlists.name AS my_playlist_name, channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
-	FROM videos 
-	LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
-	INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
-	LEFT JOIN channel_types ON channels.type = channel_types.id 
-	WHERE channels.status > 0 
-		AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL) 
-		AND (videos.status <> -2 OR videos.status IS NULL)
-	ORDER BY channel_sort ASC, SUBSTR(videos.date_published, 0, 8) DESC, CAST(duration AS INT) ASC
-	LIMIT 1000;
-END;
-    // echo("<pre>$sql</pre>");
-	// die;
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $resChannels = $stmt->fetchAll();
-    
-    $arrTable = [];
-    
-    foreach ($resChannels as $row) {
-		$row['date_published'] = substr($row['date_published'], 0, 10);
-        
-        $arrTable[] = <<<END
-	<tr>
-		<td><input type='checkbox' /></td>
-		<td><a href='https://www.youtube.com/channel/{$row['channel_id']}' target='_blank'>{$row['channel_name']}</a></td>
-		<td><a href='https://www.youtube.com/watch?v={$row['id']}' target='_blank'>{$row['title']}</a></td>
-		<td>{$row['duration']}</td>
-		<td>{$row['channel_sort']}</td>
-		<td>{$row['date_published']}</td>
-		<td>{$row['label']}</td>
-	</tr>
-END;
-    }
-    
-    $htmlTableBody = implode('', $arrTable);
-    $htmlTable = <<<END
-	<table id="tblTracks_$myChannelId">
-		<thead>
-			<tr>
-				<th class="group-word">Action</th>
-				<th class="group-letter-1">Channel</th>
-				<th class="group-letter-1">Video</th>
-				<th class="group-Number-1">Duration</th>
-				<th class="group-Number-1">Priority</th>
-				<th class="group-date-day">Published</th>
-				<th class="group-letter-1">Type</th>
-			</tr>
-		</thead>
-		<tbody>
-			$htmlTableBody
-		</tbody>
-	</table>
-END;
-
-    // select list: playlists.
-    $sql = "SELECT id, name FROM playlists WHERE account = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $resChannels = $stmt->fetchAll();
-
-    $htmlSelect = '<select name="selPlaylist" id="selPlaylist">';
-    
-    foreach ($resChannels as $row) {
-        $htmlSelect .= "<option value='{$row["id"]}'>{$row["name"]}</option>";
-    }
-    
-    $htmlSelect .= '</select>';
+	
+	$objJson = [
+		"total_rows" => $resCount['count'],
+		"headers" => $arrHeaders,
+		"rows" => $arrTable
+	];
+	
+	echo json_encode($objJson, JSON_PRETTY_PRINT);
 }
 
 function _updateSubscriptions($service, $pdo, &$htmlBody, $myChannelId)
@@ -407,7 +443,7 @@ END;
         $stmt->execute();
     }
     
-    $htmlBody .= 'Upated subscriptions: ' . count($arrMySubscriptions) . '<br>';
+    echo 'Upated subscriptions: ' . count($arrMySubscriptions) . '<br>';
 }
 
 function _updatePlaylists($service, $pdo, &$htmlBody, $myChannelId)
@@ -450,7 +486,7 @@ END;
         $stmt->execute();
     }
     
-    $htmlBody .= 'Upated playlists: ' . count($arrMyPlaylists) . '<br>';
+    echo 'Upated playlists: ' . count($arrMyPlaylists) . '<br>';
 }
 
 function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId)
@@ -532,9 +568,9 @@ END;
             $stmt->execute();
         }
         
-        $htmlBody .= 'Upated videos playlists: ' . count($arrVideos) . '<br>';
+        echo 'Upated videos playlists: ' . count($arrVideos) . '<br>';
     } else {
-        $htmlBody .= 'Videos playlists up to date.<br>';
+        echo 'Videos playlists up to date.<br>';
     }
 }
 
@@ -633,9 +669,9 @@ END;
             $stmt->execute();
         }
         
-        $htmlBody .= 'Added videos: ' . count($arrVideos).'<br>';
+        echo 'Added videos: ' . count($arrVideos).'<br>';
     } else {
-        $htmlBody .= 'Videos up to date.<br>';
+        echo 'Videos up to date.<br>';
     }
 }
 
@@ -731,9 +767,9 @@ END;
             $stmt->execute();
         }
         
-        $htmlBody .= 'Upated videos ratings: ' . count($arrVideos) . '<br>';
+        echo 'Upated videos ratings: ' . count($arrVideos) . '<br>';
     } else {
-        $htmlBody .= 'Videos ratings up to date.<br>';
+        echo 'Videos ratings up to date.<br>';
     }
     
     if (count($arrVideos2) !== 0) {
@@ -743,9 +779,9 @@ END;
             $stmt->execute();
         }
         
-        $htmlBody .= 'Upated videos duration: ' . count($arrVideos2) . '<br>';
+        echo 'Upated videos duration: ' . count($arrVideos2) . '<br>';
     } else {
-        $htmlBody .= 'Videos duration up to date.<br>';
+        echo 'Videos duration up to date.<br>';
     }
 }
 
@@ -831,133 +867,16 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
         }
         
         if ($strBtn == 'btnSort') {
-            $htmlBody .= "Upated $strTable Order ($i).<br>";
+            echo "Upated $strTable Order ($i).<br>";
         } elseif ($strBtn == 'btnType') {
-            $htmlBody .= "Upated $strTable Type ($i).<br>";
+            echo "Upated $strTable Type ($i).<br>";
         } elseif (count($arrVideoId) > 0) {
-            $htmlBody .= "Inserted " . count($arrVideoId) . " videos into playlist.<br>";
+            echo "Inserted " . count($arrVideoId) . " videos into playlist.<br>";
         } else {
-            $htmlBody .= "Upated $strTable Status ($i).<br>";
+            echo "Upated $strTable Status ($i).<br>";
         }
         
         echo $htmlBody;
     }
-    
-    die;
 }
 ?>
-<!doctype html>
-<html>
-	<head>
-		<title>My Prime</title>
-		<link rel="shortcut icon" type="image/ico" href="assets/favicon/favicon.ico"/>
-		
-		<!-- Tablesorter: required -->
-		<script src="js/jquery-latest.min.js"></script>
-		<script src="js/jquery.tablesorter.min.js"></script>
-		<script src="js/jquery.tablesorter.widgets.min.js"></script>
-
-		<!-- Theme -->
-		<link rel="stylesheet" href="css/bootstrap-v3.min.css">
-		<link rel="stylesheet" href="css/theme.bootstrap.css">
-		<script src="js/bootstrap.min.js"></script>
-		
-		<!-- Tablesorter: optional -->
-		<link rel="stylesheet" href="css/jquery.tablesorter.pager.min.css">
-		<script src="js/widgets/widget-filter.min.js"></script>
-		<script src="js/widgets/widget-storage.js"></script>
-		<script src="js/extras/jquery.tablesorter.pager.min.js"></script>
-		
-		<!-- DRAG -->
-		<script src="js/jquery-ui.min.js"></script>
-		
-		<!-- COOKIES -->
-		<script src="js/js.cookie-2.2.1.min.js"></script>
-		
-		<!-- My Prime -->
-		<link href="css/my-prime.css" rel="stylesheet">
-		<script src="js/my-prime.js"></script>
-	</head>
-	<body>
-		<input type="radio" name="account" id="video" value="video" /> Video <input type="radio" name="account" id="music" value="music" /> Music | 
-		<a href="?">Home</a> | 
-		List: <a href="?action=_listSubscriptions">🔖Subscriptions</a> | 
-		<a href="?action=_listPlaylists">🔀Playlists</a> | 
-		<a href="?action=_listVideos">📖Tracks</a>
-		<br />		
-		Update: <a href="?action=_updateSubscriptions">🔖Upd Subscriptions</a> | 
-		<a href="?action=_updatePlaylists">🔀Upd Playlists</a> | 
-		<a href="?action=_updateAll">🔂Upd ALL</a> | 
-		<a href="?action=_updatePlaylistsDetails">🔂Upd Pl. Details</a> | 
-		<a href="?action=_updateVideos">📖Upd Tracks</a> | 
-		<a href="?action=_updateVideosDetails">📄Upd Tracks Details</a>
-		<br>
-		<?=$htmlBody?>
-		<?php
-        if (isset($_GET['action'])) {
-            $action = $_GET['action'];
-        } else {
-            $action = '';
-        }
-        ?>
-		<div class="<?=$action?>">
-			<?php
-            if (in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos'])) {
-                ?>
-			<div class="pager">
-				Filters:
-				<select id="selFilter">
-					<option value="">-----</option>
-					<?php
-					// select list: playlists.
-					$sql = "SELECT * FROM filters WHERE account = '$myChannelId'";
-					$stmt = $pdo->prepare($sql);
-					$stmt->execute();
-					$resChannels = $stmt->fetchAll();
-					
-					foreach ($resChannels as $row) {
-						echo "<option value=\"{$row["rules"]}^{$row["playlist"]}\">{$row["label"]}</option>";
-					}
-					?>
-				</select>
-				|
-				Page: <select class="gotoPage"></select>
-				<img src="img/icons/first.png" class="first" alt="First" title="First page" />
-				<img src="img/icons/prev.png" class="prev" alt="Prev" title="Previous page" />
-				<span class="pagedisplay"></span>
-				<img src="img/icons/next.png" class="next" alt="Next" title="Next page" />
-				<img src="img/icons/last.png" class="last" alt="Last" title= "Last page" />
-				<select class="pagesize">
-					<option value="50">50</option>
-					<option value="100">100</option>
-					<option value="200">200</option>
-					<option value="500">500</option>
-					<option value="1000">1000</option>
-				</select>
-				<br />
-				<input type='checkbox' id='checkAll' /> Check All 
-				<button type="button" id="btnIgnore" class="download">Hide selected</button>
-				<button type="button" id="btnUnignore" class="download">Show selected</button>
-				<?=$htmlSelect;?>
-				<?php
-                if (in_array($action, ['_listSubscriptions', '_listPlaylists'])) {
-                    ?>
-				<button type="button" id="btnSort" class="download">Save order</button>
-				<button type="button" id="btnType" class="download">Save checked to type</button>
-				<?php
-                } elseif ($action == '_listVideos') {
-                ?>
-				<button type="button" id="btnPlaylist" class="download">Save checked to playlist</button>
-				<?php
-                } ?>
-				<span id='status'></span>
-			</div>
-			
-			<?php
-            }
-            
-            echo $htmlTable;
-            ?>
-		</div>
-	</body>
-</html>
