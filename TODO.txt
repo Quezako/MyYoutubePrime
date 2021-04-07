@@ -1,4 +1,5 @@
 TODO:
+longer session (prevent 401).
 select box: uncheck boxes after change.
 save and restore all input state with cookies.
 filter: add column sorting
@@ -10,10 +11,8 @@ bug? updates do not take all entries, maybe 49 instead of 50?
 for each element already in database: check if deleted. if yes, add flag.
 --
 LATER:
-longer session (prevent 401).
 ?DB: my playlists, field: is_watch_later? tags? or add weigth?
 ?DB: videos: get details for id already in database?
-PHP main: check API instead of a big try catch.
 show thumbs, extended cells on click
 Laravel + Vue.js
 --
@@ -84,3 +83,4 @@ table and filter : add types
 DB: store and edit filter rules.
 table: load data with ajax.
 bug: <16 not getting 2.
+PHP main: check API instead of a big try catch.

@@ -22,6 +22,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
 $client = new Google_Client();
+$client->setAccessType('offline');
 $client->setClientId($OAUTH2_CLIENT_ID);
 $client->setClientSecret($OAUTH2_CLIENT_SECRET);
 
@@ -51,6 +52,14 @@ if (isset($_GET['code'])) {
 
 if (isset($_SESSION[$tokenSessionKey])) {
     $client->setAccessToken($_SESSION[$tokenSessionKey]);
+}
+
+if ($client->isAccessTokenExpired()) {
+	var_dump($client->getAccessToken());
+	// $newAccessToken = json_decode($client->getAccessToken());
+	$newAccessToken = ($client->getAccessToken());
+	// $client->refreshToken($newAccessToken->refresh_token);
+	$client->refreshToken($newAccessToken['access_token']);
 }
 
 // SQLite.
@@ -148,7 +157,7 @@ function _showAuth($client, &$htmlBody)
 	<p>You need to <a href="$authUrl">authorize access</a> before proceeding.<p>
 END;
 
-    header('Location: ' . $authUrl);
+    // header('Location: ' . $authUrl);
 }
 
 function _getMyChannelId($service, &$myChannelId)

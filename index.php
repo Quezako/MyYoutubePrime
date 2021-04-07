@@ -18,6 +18,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
 $client = new Google_Client();
+$client->setAccessType('offline');
 $client->setClientId($OAUTH2_CLIENT_ID);
 $client->setClientSecret($OAUTH2_CLIENT_SECRET);
 
@@ -53,6 +54,14 @@ if (isset($_GET['code'])) {
 
 if (isset($_SESSION[$tokenSessionKey])) {
     $client->setAccessToken($_SESSION[$tokenSessionKey]);
+}
+
+if ($client->isAccessTokenExpired()) {
+	var_dump($client->getAccessToken());
+	// $newAccessToken = json_decode($client->getAccessToken());
+	$newAccessToken = ($client->getAccessToken());
+	// $client->refreshToken($newAccessToken->refresh_token);
+	$client->refreshToken($newAccessToken['access_token']);
 }
 
 // SQLite.
@@ -117,7 +126,6 @@ END;
     _showAuth($client, $htmlBody);
 }
 
-
 function _showAuth($client, &$htmlBody)
 {
     // If the user hasn't authorized the app, initiate the OAuth flow
@@ -131,7 +139,7 @@ function _showAuth($client, &$htmlBody)
 	<p>You need to <a href="$authUrl">authorize access</a> before proceeding.<p>
 END;
 
-    header('Location: ' . $authUrl);
+    // header('Location: ' . $authUrl);
 }
 
 function _getMyChannelId($service, &$myChannelId)
@@ -177,8 +185,8 @@ function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId, &$htmlSel
     $htmlSelect .= '</select>';
     
     $htmlTable = <<<END
-	<table id="tblSubs_$myChannelId">
-		<thead>
+	<table id="tblSubs_$myChannelId" class="table table-bordered table-striped">
+		<thead class="thead-dark">
 			<tr>
 				<th class="group-word"><input type='checkbox' id='checkAll' /> Action</th>
 				<th class="group-letter-1">Channel</th>
@@ -197,8 +205,8 @@ END;
 function _listPlaylists($service, $pdo, &$htmlTable, $myChannelId)
 {
     $htmlTable = <<<END
-	<table id="tblPlaylists_$myChannelId">
-		<thead>
+	<table id="tblPlaylists_$myChannelId" class="table table-bordered table-striped">
+		<thead class="thead-dark">
 			<tr>
 				<th class="group-word"><input type='checkbox' id='checkAll' /> Action</th>
 				<th class="group-letter-1">Playlist</th>
@@ -215,8 +223,8 @@ END;
 function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId)
 {
     $htmlTable = <<<END
-	<table id="tblTracks_$myChannelId">
-		<thead>
+	<table id="tblTracks_$myChannelId" class="table table-bordered table-striped">
+		<thead class="thead-dark">
 			<tr>
 				<th class="group-word">Action</th>
 				<th class="group-letter-1">Channel</th>
@@ -259,11 +267,13 @@ END;
 		<script src="js/jquery.tablesorter.min.js"></script>
 		<script src="js/jquery.tablesorter.widgets.min.js"></script>
 
-		<!-- Theme -->
-		<link rel="stylesheet" href="css/bootstrap-v3.min.css">
-		<link rel="stylesheet" href="css/theme.bootstrap.css">
+		<!-- Bootstrap -->
+		<link rel="stylesheet" href="css/bootstrap.min.css">
+		<link rel="stylesheet" href="css/theme.bootstrap_4.min.css">
 		<script src="js/bootstrap.min.js"></script>
-		
+		<script src="js/bootstrap.bundle.min.js"></script>
+
+
 		<!-- Tablesorter: optional -->
 		<link rel="stylesheet" href="css/jquery.tablesorter.pager.min.css">
 		<script src="js/widgets/widget-filter.min.js"></script>
@@ -277,25 +287,41 @@ END;
 		<script src="js/js.cookie-2.2.1.min.js"></script>
 		
 		<!-- My Prime -->
-		<link href="css/my-prime.css" rel="stylesheet">
+		<link rel="stylesheet" href="css/my-prime.css">
 		<script src="js/my-prime.js"></script>
 	</head>
 	<body>
-		<input type="radio" name="account" id="video" value="video" /> Video <input type="radio" name="account" id="music" value="music" /> Music | 
-		<a href="?">Home</a> | 
-		List: <a href="?action=_listSubscriptions">🔖Subscriptions</a> | 
-		<a href="?action=_listPlaylists">🔀Playlists</a> | 
-		<a href="?action=_listVideos">📖Tracks</a>
-		<br />	
-		Update: 
-		<button type="button" id="_updateSubscriptions" class="download">🔖Upd Subscriptions</button> | 
-		<button type="button" id="_updatePlaylists" class="download">🔀Upd Playlists</button>  | 
-		<button type="button" id="_updateAll" class="download">🔂Upd ALL</button>  | 
-		<button type="button" id="_updatePlaylistsDetails" class="download">🔂Upd Pl. Details</button>  | 
-		<button type="button" id="_updateVideos" class="download">📖Upd Tracks</button>  | 
-		<button type="button" id="_updateVideosDetails" class="download">📄Upd Tracks Details</button> 
-		<br />
-		<div id='status' style="background:#333;padding:4px;margin:5px;">Ready.</div>
+		<div id='status' class="alert alert-primary alert-dismissible fade show" role="alert">
+			Ready.
+			<button type="button" class="close" data-dismiss="alert" aria-label="Close">
+				<span aria-hidden="true">&times;</span>
+			</button>
+		</div>
+		<nav class="navbar navbar-expand-lg navbar-light bg-light">
+			<input type="radio" name="account" id="video" value="video" />&nbsp;Video&nbsp;<input type="radio" name="account" id="music" value="music" />&nbsp;Music&nbsp;&nbsp;&nbsp;
+			<ul class="nav nav-tabs">
+				<li class="nav-item">
+					<a class="nav-link active" href="?">Home</a>
+				</li>
+				<li class="nav-item">
+					<a class="nav-link" href="?action=_listSubscriptions">🔖Subscriptions</a>
+				</li>
+				<li class="nav-item">
+					<a class="nav-link" href="?action=_listPlaylists">🔀Playlists</a>
+				</li>
+				<li class="nav-item">
+					<a class="nav-link" href="?action=_listVideos">📖Tracks</a>
+				</li>
+			</ul>
+		<div class="btn-group" role="group" aria-label="Basic example">
+				<button type="button" id="_updateSubscriptions" class="btn btn-dark">🔖Subs</button>
+				<button type="button" id="_updatePlaylists" class="btn btn-dark">🔀Playlists</button>
+				<button type="button" id="_updateAll" class="btn btn-dark">🔂ALL</button>
+				<button type="button" id="_updatePlaylistsDetails" class="btn btn-dark">🔂Pl. Det.</button>
+				<button type="button" id="_updateVideos" class="btn btn-dark">📖Tracks</button>
+				<button type="button" id="_updateVideosDetails" class="btn btn-dark">📄Tracks Det.</button> 
+		</div>
+		</nav>
 		<?=$htmlBody?>
 		<?php
         if (isset($_GET['action'])) {
@@ -308,9 +334,8 @@ END;
 			<?php
             if (in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos'])) {
                 ?>
-			<div class="pager">
 				Filters:
-				<select id="selFilter">
+				<select id="selFilter" class="form-control-sm">
 					<option value="">-----</option>
 					<?php
 					// select list: playlists.
@@ -324,36 +349,45 @@ END;
 					}
 					?>
 				</select>
-				|
-				Page: <select class="gotoPage"></select>
-				<img src="img/icons/first.png" class="first" alt="First" title="First page" />
-				<img src="img/icons/prev.png" class="prev" alt="Prev" title="Previous page" />
-				<span class="pagedisplay"></span>
-				<img src="img/icons/next.png" class="next" alt="Next" title="Next page" />
-				<img src="img/icons/last.png" class="last" alt="Last" title= "Last page" />
-				<select class="pagesize">
-					<option value="50">50</option>
-					<option value="100">100</option>
-					<option value="200">200</option>
-					<option value="500">500</option>
-					<option value="1000">1000</option>
-				</select>
-				<br />
-				<input type='checkbox' id='checkAll' /> Check All 
-				<button type="button" id="btnIgnore" class="download">Hide selected</button>
-				<button type="button" id="btnUnignore" class="download">Show selected</button>
-				<?=$htmlSelect;?>
-				<?php
-                if (in_array($action, ['_listSubscriptions', '_listPlaylists'])) {
-                    ?>
-				<button type="button" id="btnSort" class="download">Save order</button>
-				<button type="button" id="btnType" class="download">Save checked to type</button>
-				<?php
-                } elseif ($action == '_listVideos') {
-                ?>
-				<button type="button" id="btnPlaylist" class="download">Save checked to playlist</button>
-				<?php
-                } ?>
+				<div class="pager ts-pager">
+					<div class="form-inline">
+						<div class="btn-group btn-group-sm mx-1" role="group">
+							<button type="button" class="btn btn-secondary first" title="first">⇤</button>
+							<button type="button" class="btn btn-secondary prev" title="previous">←</button>
+						</div>
+						<span class="pagedisplay"></span>
+						<div class="btn-group btn-group-sm mx-1" role="group">
+							<button type="button" class="btn btn-secondary next" title="next">→</button>
+							<button type="button" class="btn btn-secondary last" title="last">⇥</button>
+						</div>
+						<select class="form-control-sm mx-1 pagesize" title="Select page size">
+							<option value="50">50</option>
+							<option value="100">100</option>
+							<option value="200">200</option>
+							<option value="500">500</option>
+							<option value="1000">1000</option>
+							<option value="all">All Rows</option>
+						</select>
+						<select class="form-control-sm mx-1 pagenum gotoPage" title="Select page number"></select>
+					</div>
+				</div>
+				<div class="btn-group" role="group" aria-label="Basic example">
+					<button type="button" id="btnCheck" class="btn btn-dark"><input type='checkbox' id='checkAll' /> Check All </button>
+					<button type="button" id="btnIgnore" class="btn btn-dark">Hide selected</button>
+					<button type="button" id="btnUnignore" class="btn btn-dark">Show selected</button>
+					<?=$htmlSelect;?>
+					<?php
+					if (in_array($action, ['_listSubscriptions', '_listPlaylists'])) {
+						?>
+					<button type="button" id="btnSort" class="btn btn-dark">Save order</button>
+					<button type="button" id="btnType" class="btn btn-dark">Save checked to type</button>
+					<?php
+					} elseif ($action == '_listVideos') {
+					?>
+					<button type="button" id="btnPlaylist" class="btn btn-dark">Save checked to playlist</button>
+					<?php
+					} ?>
+				</div>
 			</div>
 			
 			<?php
