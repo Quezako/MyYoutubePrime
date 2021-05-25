@@ -42,5 +42,9 @@ body {
 	padding: 5px !important;
 }
 .tablesorter-pager .btn-group-sm .btn {
-  font-size: 1.2em; /* make pager arrows more visible */
+	font-size: 1.2em; /* make pager arrows more visible */
+}
+#status {
+	max-height: 400px;
+	overflow: auto;
 }

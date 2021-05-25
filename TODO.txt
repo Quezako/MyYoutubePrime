@@ -1,8 +1,9 @@
 TODO:
-longer session (prevent 401).
-select box: uncheck boxes after change.
+table: loader, filter dropdown.
+session: error line 73 and 74
+longer session (prevent 401): refresh token.
+manage remove rated tracks from watch later playlists.
 save and restore all input state with cookies.
-filter: add column sorting
 DB: ability to sort types.
 table: refresh after action.
 update videos from my playlists : only after last checked.
@@ -84,3 +85,5 @@ DB: store and edit filter rules.
 table: load data with ajax.
 bug: <16 not getting 2.
 PHP main: check API instead of a big try catch.
+filter: add column sorting
+select box: uncheck boxes after change.

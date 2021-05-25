@@ -55,15 +55,15 @@ if (isset($_GET['code'])) {
 if (isset($_SESSION[$tokenSessionKey])) {
     $client->setAccessToken($_SESSION[$tokenSessionKey]);
 }
-
+/*
 if ($client->isAccessTokenExpired()) {
-	var_dump($client->getAccessToken());
+	// var_dump($client->getAccessToken());
 	// $newAccessToken = json_decode($client->getAccessToken());
 	$newAccessToken = ($client->getAccessToken());
 	// $client->refreshToken($newAccessToken->refresh_token);
 	$client->refreshToken($newAccessToken['access_token']);
 }
-
+*/
 // SQLite.
 try {
     $pdo = new PDO('sqlite:' . dirname(__FILE__) . '/my-prime.db');
@@ -170,7 +170,7 @@ function _covtime($youtube_time)
 
 function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId, &$htmlSelect)
 {
-	$sql = "SELECT * FROM channel_types WHERE account = '$myChannelId'";
+	$sql = "SELECT * FROM channel_types WHERE account = '$myChannelId' ORDER BY sort ASC";
     // var_dump($sql);
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
@@ -313,14 +313,15 @@ END;
 					<a class="nav-link" href="?action=_listVideos">📖Tracks</a>
 				</li>
 			</ul>
-		<div class="btn-group" role="group" aria-label="Basic example">
-				<button type="button" id="_updateSubscriptions" class="btn btn-dark">🔖Subs</button>
-				<button type="button" id="_updatePlaylists" class="btn btn-dark">🔀Playlists</button>
-				<button type="button" id="_updateAll" class="btn btn-dark">🔂ALL</button>
-				<button type="button" id="_updatePlaylistsDetails" class="btn btn-dark">🔂Pl. Det.</button>
-				<button type="button" id="_updateVideos" class="btn btn-dark">📖Tracks</button>
-				<button type="button" id="_updateVideosDetails" class="btn btn-dark">📄Tracks Det.</button> 
-		</div>
+			&nbsp;&nbsp;&nbsp;Update&nbsp;&nbsp;
+			<div class="btn-group" role="group" aria-label="Basic example">
+					<button type="button" id="_updateSubscriptions" class="btn btn-dark">🔖Subs</button>
+					<button type="button" id="_updatePlaylists" class="btn btn-dark">🔀Playlists</button>
+					<button type="button" id="_updateAll" class="btn btn-dark">🔂ALL</button>
+					<button type="button" id="_updateVideos" class="btn btn-dark">📖Tracks</button>
+					<button type="button" id="_updatePlaylistsDetails" class="btn btn-dark">🔂Pl. Det.</button>
+					<button type="button" id="_updateVideosDetails" class="btn btn-dark">📄Tracks Det.</button>
+			</div>
 		</nav>
 		<?=$htmlBody?>
 		<?php
@@ -339,7 +340,7 @@ END;
 					<option value="">-----</option>
 					<?php
 					// select list: playlists.
-					$sql = "SELECT * FROM filters WHERE account = '$myChannelId'";
+					$sql = "SELECT * FROM filters WHERE account = '$myChannelId' ORDER BY sort ASC";
 					$stmt = $pdo->prepare($sql);
 					$stmt->execute();
 					$resChannels = $stmt->fetchAll();
@@ -375,11 +376,17 @@ END;
 					<button type="button" id="btnCheck" class="btn btn-dark"><input type='checkbox' id='checkAll' /> Check All </button>
 					<button type="button" id="btnIgnore" class="btn btn-dark">Hide selected</button>
 					<button type="button" id="btnUnignore" class="btn btn-dark">Show selected</button>
-					<?=$htmlSelect;?>
 					<?php
 					if (in_array($action, ['_listSubscriptions', '_listPlaylists'])) {
 						?>
 					<button type="button" id="btnSort" class="btn btn-dark">Save order</button>
+					<?php
+					}
+					?>
+					<?=$htmlSelect;?>
+					<?php
+					if (in_array($action, ['_listSubscriptions', '_listPlaylists'])) {
+						?>
 					<button type="button" id="btnType" class="btn btn-dark">Save checked to type</button>
 					<?php
 					} elseif ($action == '_listVideos') {
