@@ -372,6 +372,7 @@ END;
 						<select class="form-control-sm mx-1 pagenum gotoPage" title="Select page number"></select>
 					</div>
 				</div>
+				
 				<div class="btn-group" role="group" aria-label="Basic example">
 					<button type="button" id="btnCheck" class="btn btn-dark"><input type='checkbox' id='checkAll' /> Check All </button>
 					<button type="button" id="btnIgnore" class="btn btn-dark">Hide selected</button>
@@ -395,7 +396,6 @@ END;
 					<?php
 					} ?>
 				</div>
-			</div>
 			
 			<?php
             }
