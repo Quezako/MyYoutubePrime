@@ -1,15 +1,21 @@
 TODO:
+vue pour éditer les filtres.
 table: loader, filter dropdown.
-session: error line 73 and 74
-longer session (prevent 401): refresh token.
+!security: prevent injection: $_GET['filter'], $_GET['column'], $_GET['size']
+- Utiliser mysql_real_escape_string pour échapper la chaîne reçue
+- Utilisation de requêtes préparées
+- Utilisation d’un ORM (Object Relationnal Mapping)
+session:
+- error line 73 and 74
+- longer (prevent 401): refresh token.
+- save and restore all input state with cookies.
 manage remove rated tracks from watch later playlists.
-save and restore all input state with cookies.
+for each element already in database: check if deleted. if yes, add flag.
 DB: ability to sort types.
 table: refresh after action.
 update videos from my playlists : only after last checked.
 message: added videos, rating: separate inserted from updated.
 bug? updates do not take all entries, maybe 49 instead of 50?
-for each element already in database: check if deleted. if yes, add flag.
 --
 LATER:
 ?DB: my playlists, field: is_watch_later? tags? or add weigth?

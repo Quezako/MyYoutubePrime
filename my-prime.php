@@ -1,8 +1,14 @@
 <?php
+/*
+TODO:
+separate static html from api service and sqlite service
+subscriptions: add nb of subs
+tracks: add nb of views
+*/
 error_reporting(E_ALL);
+set_time_limit(600);
 ini_set("display_errors", 1);
 ini_set('max_execution_time', 600); //300 seconds = 5 minutes
-set_time_limit(600);
 ini_set("xdebug.var_display_max_children", '-1');
 ini_set("xdebug.var_display_max_data", '-1');
 ini_set("xdebug.var_display_max_depth", '-1');
@@ -34,7 +40,7 @@ $service = new Google_Service_YouTube($client);
 $htmlBody = '';
 $htmlTable = '';
 $htmlSelect = '';
-$myChannelId = '';
+$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g';
 
 // Check if an auth token exists for the required scopes
 $tokenSessionKey = 'token-' . $client->prepareScopes();
@@ -53,8 +59,10 @@ if (isset($_SESSION[$tokenSessionKey])) {
     $client->setAccessToken($_SESSION[$tokenSessionKey]);
 }
 
-if ($client->isAccessTokenExpired()) {
+/*if ($client->isAccessTokenExpired()) {
+	echo"<pre>";
 	var_dump($client->getAccessToken());
+	var_dump($_SESSION[$tokenSessionKey]);
 	// $newAccessToken = json_decode($client->getAccessToken());
 	// $newAccessToken = ($client->getAccessToken());
 	// $client->refreshToken($newAccessToken->refresh_token);
@@ -65,7 +73,7 @@ if ($client->isAccessTokenExpired()) {
 	$_SESSION[$tokenSessionKey] = $client->getAccessToken();
 	// Warning: json_decode() expects parameter 1 to be string, array given in D:\Dev\MyYoutubePrime\my-prime.php on line 73
 	// ( ! ) Notice: Trying to get property 'refresh_token' of non-object in D:\Dev\MyYoutubePrime\my-prime.php on line 74
-}
+}*/
 
 // SQLite.
 try {
@@ -79,30 +87,32 @@ try {
 
 // Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
-    try {
-        _getMyChannelId($service, $myChannelId);
-    } catch (Google_Service_Exception $e) {
-        echo sprintf(
-            '<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
-            ($e->getMessage())
-        );
-        
-        if (in_array($e->getCode(), [401])) {
-            _showAuth($client, $htmlBody);
-        }
-    } catch (Google_Exception $e) {
-        echo sprintf(
-            '<p>An Google_Exception error occurred: <code>%s</code></p>',
-            ($e->getMessage())
-        );
-    } catch (Exception $e) {
-        echo sprintf(
-            '<p>An Exception error occurred: <code>%s</code></p>',
-            ($e->getMessage())
-        );
-    }
-	
     if (isset($_GET['action'])) {
+		if (!in_array($_GET['action'],['_listSubscriptions', '_listPlaylists', '_listVideos', '_ajaxUpdate'])) {
+			try {
+				_getMyChannelId($service, $myChannelId);
+			} catch (Google_Service_Exception $e) {
+				echo sprintf(
+					'<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
+					($e->getMessage())
+				);
+				
+				if (in_array($e->getCode(), [401])) {
+					_showAuth($client, $htmlBody);
+				}
+			} catch (Google_Exception $e) {
+				echo sprintf(
+					'<p>An Google_Exception error occurred: <code>%s</code></p>',
+					($e->getMessage())
+				);
+			} catch (Exception $e) {
+				echo sprintf(
+					'<p>An Exception error occurred: <code>%s</code></p>',
+					($e->getMessage())
+				);
+			}
+		}
+		
         switch ($_GET['action']) {
             case '_listSubscriptions':
             case '_listPlaylists':
@@ -205,6 +215,7 @@ function _list($pdo, $myChannelId)
 			"Status",
 			"Sort",
 			"Type",
+			"Subs",
 		];
 		$arrFields = [
 			"id",
@@ -212,7 +223,8 @@ function _list($pdo, $myChannelId)
 			"name",
 			"status",
 			"sort",
-			"channel_types.label",
+			"type2",
+			"subs",
 		];
 		$sqlCount = <<<END
 SELECT count(*) AS count
@@ -221,7 +233,7 @@ LEFT JOIN channel_types ON channels.type = channel_types.id
 WHERE channels.account = '$myChannelId'
 END;
 		$sql = <<<END
-SELECT channels.*, channel_types.label 
+SELECT channels.*, channel_types.label, substr('0000'||channel_types.sort, -4, 4) || "_" || channel_types.label AS type2
 FROM channels 
 LEFT JOIN channel_types ON channels.type = channel_types.id 
 WHERE channels.account = '$myChannelId' 
@@ -262,6 +274,7 @@ END;
 			"Priority",
 			"Published",
 			"Type",
+			"Views",
 		];
 		$arrFields = [
 			"id",
@@ -271,6 +284,7 @@ END;
 			"channels.sort",
 			"date_published",
 			"channel_types.label",
+			"views",
 		];
 		$sqlCount = <<<END
 SELECT count(*) AS count
@@ -298,8 +312,15 @@ WHERE channels.status > 0
 END;
 	}
 	
+	$isType2 = false;
+	
 	if (is_array($_GET['filter'])) {
 		foreach ($_GET['filter'] as $key => $filter) {
+			if ($arrFields[$key] === "type2") {
+				$arrFields[$key] = "channel_types.label";
+				$isType2 = true;
+			}
+			
 			$strFilterType = substr($filter, 0, 1);
 				
 			if ($strFilterType === '<' || $strFilterType === '>') {
@@ -331,7 +352,11 @@ END;
 				// }
 			} else {
 				$arrFilter = explode("|", $filter);
-				$strFilter .= " AND ({$arrFields[$key]} LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%')";
+				// if ($arrFields[$key] === "type2") {
+					// $strFilter .= " AND (channel_types.label LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%' OR channel_types.sort LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%')";
+				// } else {
+					$strFilter .= " AND ({$arrFields[$key]} LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%')";
+				// }
 			}
 		}
 	}
@@ -339,6 +364,11 @@ END;
 	if (is_array($_GET['column'])) {
 		foreach ($_GET['column'] as $key => $order) {
 			$order = $order == 0 ? 'ASC' : 'DESC';
+			
+			if ($arrFields[$key] === "channel_types.label" && $isType2 === true) {
+				$arrFields[$key] = "channel_types.sort";
+			}
+			
 			$arrSort[] = "{$arrFields[$key]} $order";
 		}
 	}
@@ -353,7 +383,7 @@ END;
 	
 $strFilter
 END;
-    // var_dump($sqlCount);
+    // echo"<pre>";var_dump($sqlCount);
     $stmt = $pdo->prepare($sqlCount);
     $stmt->execute();
     $resCount = $stmt->fetch();
@@ -371,28 +401,30 @@ $strFilter
 $strSort
 LIMIT {$offset}, {$rowCount};
 END;
-    // var_dump($sql);
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannels = $stmt->fetchAll();
+    // echo"<pre>";var_dump($sql);
+    // var_dump($resChannels);
     
     $arrTable = [];
     
     foreach ($resChannels as $row) {
 		if ($table == 'channels') {
-			$type = $row['type'];
+			// $type = $row['type'];
 			
-			if ($type !== null) {
-				$type = sprintf('%02d', $row['type']);	
-			}
+			// if ($type !== null) {
+				// $type = sprintf('%02d', $row['type']);	
+			// }
 			
 			$arrTable[] = [
 				$arrHeaders[0] => "<input type='checkbox'>",
 				$arrHeaders[1] => "<a href='https://www.youtube.com/channel/{$row['id']}' target='_blank'>{$row['name']}</a>",
-				$arrHeaders[2] => "<a href='https://www.youtube.com/playlist?list={$row['playlist_id']}' target='_blank'>{$row['name']}</a>",
+				$arrHeaders[2] => "<a href='https://www.youtube.com/channel/{$row['id']}/videos?view=0&sort=p&flow=grid' target='_blank'>{$row['name']}</a>",
 				$arrHeaders[3] => "{$row['status']}",
 				$arrHeaders[4] => "{$row['sort']}",
-				$arrHeaders[5] => "{$type}-{$row['label']}",
+				$arrHeaders[5] => "{$row['type2']}",
+				$arrHeaders[6] => "{$row['subs']}",
 			];
 		} elseif ($table == 'playlists') {
 			$arrTable[] = [
@@ -412,6 +444,7 @@ END;
 				$arrHeaders[4] => "{$row['channel_sort']}",
 				$arrHeaders[5] => "{$row['date_published']}",
 				$arrHeaders[6] => "{$row['label']}",
+				$arrHeaders[7] => "{$row['views']}",
 			];
 		}
     }
@@ -450,13 +483,14 @@ function _updateSubscriptions($service, $pdo, &$htmlBody, $myChannelId)
 
         $paramChannels = [
            'id' => $strSubs,
-           'fields' => 'items.id,items.contentDetails.relatedPlaylists.uploads',
+           'fields' => 'items.id,items.contentDetails.relatedPlaylists.uploads,items.statistics.subscriberCount',
         ];
 
-        $rspChannels = $service->channels->listChannels('contentDetails', $paramChannels);
+        $rspChannels = $service->channels->listChannels('contentDetails,statistics', $paramChannels);
         
         foreach ($rspChannels->items as $channel) {
             $arrTmpSubscriptions[$channel->id]['uploads'] = $channel->contentDetails->relatedPlaylists->uploads;
+            $arrTmpSubscriptions[$channel->id]['subs'] = $channel->statistics->subscriberCount;
         }
         
         $arrMySubscriptions += $arrTmpSubscriptions;
@@ -464,12 +498,13 @@ function _updateSubscriptions($service, $pdo, &$htmlBody, $myChannelId)
     
     foreach ($arrMySubscriptions as $mySubscriptionId => $mySubscription) {
         $sql = <<<END
-	INSERT INTO channels (id, name, playlist_id, account) 
-	VALUES ("$mySubscriptionId", "{$mySubscription['title']}", "{$mySubscription['uploads']}", "$myChannelId")
+	INSERT INTO channels (id, name, playlist_id, account, subs) 
+	VALUES ("$mySubscriptionId", "{$mySubscription['title']}", "{$mySubscription['uploads']}", "$myChannelId", "{$mySubscription['subs']}")
 	ON CONFLICT(id) DO UPDATE SET 
 	name = "{$mySubscription['title']}",
 	playlist_id = "{$mySubscription['uploads']}",
-	account = "$myChannelId"
+	account = "$myChannelId",
+	subs = "{$mySubscription['subs']}"
 	WHERE id="$mySubscriptionId";
 END;
         $stmt = $pdo->prepare($sql);
@@ -536,13 +571,46 @@ END;
 	} else {
 		$sql = <<<END
 SELECT id FROM playlists 
-WHERE id = 'PL52YqI0PbEYU1_3bne33bXQYAviFN8AD4'
-OR id = 'PL52YqI0PbEYXZv2APe7B3wPkgdVXi1yK7'
-OR id = 'PL52YqI0PbEYXMGfA71veOZCM_4NAWVopj'
-OR id = 'PL52YqI0PbEYX18AmDYyv1lx28lIzwYgTb'
-OR id = 'PL52YqI0PbEYV_g-5wdATX6GV7QPXvPadH'
+WHERE 1 = 0
+OR id = 'PL52YqI0PbEYWESzZ97h5QzCIoKo9OZlhI'
+OR id = 'PL52YqI0PbEYWZ5aorN_KSeHvVeUcrr8H6'
 OR id = 'PL52YqI0PbEYUxtItqu6WAIqj1C7hX4LUL'
-OR id = 'PL52YqI0PbEYXzJuYKJFyCCu1lREuoMhnO';
+OR id = 'PL52YqI0PbEYV_g-5wdATX6GV7QPXvPadH'
+OR id = 'PL52YqI0PbEYXzJuYKJFyCCu1lREuoMhnO'
+OR id = 'PL52YqI0PbEYX2s-juEdNuXCyY-GUvSVor'
+OR id = 'PL52YqI0PbEYU5t0I78FhbXfeexjksd5D0'
+OR id = 'PL52YqI0PbEYW5hDkfG_5AaOLz--xroo-i'
+OR id = 'PL52YqI0PbEYU5l8BMJiMAEJO6owe7Tjvl'
+OR id = 'PL52YqI0PbEYXUDQbgy-ucXFLYk-LTdc4o'
+OR id = 'PL52YqI0PbEYX18AmDYyv1lx28lIzwYgTb'
+OR id = 'PL52YqI0PbEYWdYWfZIDSb9d4TLcwTHFNM'
+OR id = 'PL52YqI0PbEYU1_3bne33bXQYAviFN8AD4'
+OR id = 'PL52YqI0PbEYXZv2APe7B3wPkgdVXi1yK7'
+OR id = 'PL52YqI0PbEYXY2mIqhMzRQlYlSk_qjipA'
+OR id = 'PL52YqI0PbEYWYGVaDb7WaotZw1-DqeIbt'
+OR id = 'PL52YqI0PbEYXMGfA71veOZCM_4NAWVopj'
+OR id = 'PL52YqI0PbEYV-CR9Y8gOO1TlanC6VHpBV'
+OR id = 'PL52YqI0PbEYWZxaXbsJRgKSLlvL-Caj0m'
+OR id = 'PL52YqI0PbEYWqnBLaviFHouJHNYj_gNmY'
+OR id = 'PL52YqI0PbEYXTcfJc2988HdNXTuNz_R46'
+OR id = 'PL52YqI0PbEYUTr_Wnjip5_p5ue0E-60Aj'
+OR id = 'PL52YqI0PbEYWHvaMgh19UXBNqB-K8CmLB'
+OR id = 'PL52YqI0PbEYVjeAuX3CMF9ky1rmAQLADN'
+OR id = 'PL52YqI0PbEYXfVltmvdm2OrgB58SYLpzI'
+OR id = 'PL52YqI0PbEYWFKKOwPJxMXdTi7IhEb_e5'
+OR id = 'FLDhEgLlKq6teYnMOUS3MZ_g'
+OR id = 'PL52YqI0PbEYUdPJEVeMbzMujHNDHbJUPi'
+OR id = 'PL52YqI0PbEYXaL5E8EiraX6wdEC98Q7XX'
+OR id = 'PL52YqI0PbEYWdzx7RrT2h6bp7cb5uYq7C'
+OR id = 'PL52YqI0PbEYXpDVrt6oQBeJDUkzOkOKGc'
+OR id = 'PL52YqI0PbEYVG4sa24kHOAbEN7B3v4ZzZ'
+-- OR id = 'PL52YqI0PbEYUTVvCGhOpiDaq0NsRHbEIk'
+-- OR id = 'PL52YqI0PbEYUqv-NNv4pKY7Hmd_fsftaL'
+-- OR id = 'PL52YqI0PbEYVcJePTrwQ5wbVvh25ThpHy'
+-- OR id = 'PL52YqI0PbEYVA1jSoAyGEOQZMdOaOlL-C'
+-- OR id = 'PL52YqI0PbEYVrIe5j_v6EPoK9V59AaN9d'
+-- OR id = 'PL52YqI0PbEYWUtAjS-edI4qZmyWQMTVTB'
+;
 END;
 	}
     
@@ -794,10 +862,12 @@ END;
     
     // Check if duration is defined.
     $arrVideos2 = [];
+    $arrVideos3 = [];
     $arrVideoIds = [];
     $strVideos = '';
     $i = 0;
     
+	// Duration
     $sql = <<<END
 	SELECT videos.id FROM videos
 	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
@@ -834,10 +904,58 @@ END;
             'id' => $strVideos
         ];
 
-        $rspVideos = $service->videos->listVideos('contentDetails', $queryParams);
+        $rspVideos = $service->videos->listVideos('contentDetails,statistics', $queryParams);
         
         foreach ($rspVideos->items as $video) {
             $arrVideos2[$video->id]['duration'] = _covtime($video->contentDetails->duration);
+            // $arrVideos3[$video->id]['views'] = $video->statistics->viewCount;
+        }
+    }
+	
+	// Views
+    $strVideos = '';
+    $i = 0;
+    $sql = <<<END
+	SELECT videos.id FROM videos
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
+	WHERE views IS NULL
+	-- LIMIT 1000;
+END;
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+    $resVideos = $stmt->fetchAll();
+    
+    foreach ($resVideos as $row) {
+        $strVideos .= $row['id'] . ',';
+        $i++;
+
+        if ($i == 49) {
+            $arrVideoIds[] = $strVideos;
+            $strVideos = '';
+            $i = 0;
+        }
+    }
+
+    $arrVideoIds[] = $strVideos;
+    
+    foreach ($arrVideoIds as $strVideos) {
+		if (time() - $timeStart > $timeLimit) {
+			var_dump($timeStart);
+			var_dump(time());
+			var_dump($timeStart - time());
+			var_dump($strVideos);
+			break;
+		}
+		
+        $queryParams = [
+            'id' => $strVideos
+        ];
+
+        $rspVideos = $service->videos->listVideos('contentDetails,statistics', $queryParams);
+        
+        foreach ($rspVideos->items as $video) {
+            // $arrVideos2[$video->id]['duration'] = _covtime($video->contentDetails->duration);
+            $arrVideos3[$video->id]['views'] = $video->statistics->viewCount;
         }
     }
     
@@ -863,6 +981,18 @@ END;
         echo 'Upated videos duration: ' . count($arrVideos2) . '<br>';
     } else {
         echo 'Videos duration up to date.<br>';
+    }
+    
+    if (count($arrVideos3) !== 0) {
+        foreach ($arrVideos3 as $strVideoId => $arrVideo) {
+            $sql = "UPDATE videos SET views = \"{$arrVideo['views']}\" WHERE id = \"$strVideoId\";";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute();
+        }
+        
+        echo 'Upated videos views: ' . count($arrVideos3) . '<br>';
+    } else {
+        echo 'Videos views up to date.<br>';
     }
 }
 

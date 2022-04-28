@@ -1,8 +1,8 @@
 <?php
 error_reporting(E_ALL);
+set_time_limit(300);
 ini_set("display_errors", 1);
 ini_set('max_execution_time', 300); //300 seconds = 5 minutes
-set_time_limit(300);
 
 // server should keep session data for AT LEAST x seconds.
 ini_set('session.gc_maxlifetime', 30 * 24 * 60 * 60);
@@ -76,28 +76,30 @@ try {
 
 // Check to ensure that the access token was successfully acquired.// Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
-    try {
-        _getMyChannelId($service, $myChannelId);
-    } catch (Google_Service_Exception $e) {
-        echo sprintf(
-            '<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
-            ($e->getMessage())
-        );
-        
-        if (in_array($e->getCode(), [401])) {
-            _showAuth($client, $htmlBody);
-        }
-    } catch (Google_Exception $e) {
-        echo sprintf(
-            '<p>An Google_Exception error occurred: <code>%s</code></p>',
-            ($e->getMessage())
-        );
-    } catch (Exception $e) {
-        echo sprintf(
-            '<p>An Exception error occurred: <code>%s</code></p>',
-            ($e->getMessage())
-        );
-    }
+	if (!isset($_GET['action']) || !in_array($_GET['action'],['_listSubscriptions', '_listPlaylists', '_listVideos', '_ajaxUpdate'])) {
+		try {
+			_getMyChannelId($service, $myChannelId);
+		} catch (Google_Service_Exception $e) {
+			echo sprintf(
+				'<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
+				($e->getMessage())
+			);
+			
+			if (in_array($e->getCode(), [401])) {
+				_showAuth($client, $htmlBody);
+			}
+		} catch (Google_Exception $e) {
+			echo sprintf(
+				'<p>An Google_Exception error occurred: <code>%s</code></p>',
+				($e->getMessage())
+			);
+		} catch (Exception $e) {
+			echo sprintf(
+				'<p>An Exception error occurred: <code>%s</code></p>',
+				($e->getMessage())
+			);
+		}
+	}
 	
 	if (isset($_GET['action'])) {
 		switch ($_GET['action']) {
@@ -139,7 +141,7 @@ function _showAuth($client, &$htmlBody)
 	<p>You need to <a href="$authUrl">authorize access</a> before proceeding.<p>
 END;
 
-    // header('Location: ' . $authUrl);
+    header('Location: ' . $authUrl);
 }
 
 function _getMyChannelId($service, &$myChannelId)
@@ -194,6 +196,7 @@ function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId, &$htmlSel
 				<th class="group-date-month">Status</th>
 				<th class="group-date-month">Sort</th>
 				<th class="group-letter-1">Type</th>
+				<th class="group-Number-1">Subs</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -233,6 +236,7 @@ function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId)
 				<th class="group-Number-1">Priority</th>
 				<th class="group-date-day">Published</th>
 				<th class="group-letter-1">Type</th>
+				<th class="group-Number-1">Views</th>
 			</tr>
 		</thead>
 		<tbody>
