@@ -59,22 +59,6 @@ if (isset($_SESSION[$tokenSessionKey])) {
     $client->setAccessToken($_SESSION[$tokenSessionKey]);
 }
 
-/*if ($client->isAccessTokenExpired()) {
-	echo"<pre>";
-	var_dump($client->getAccessToken());
-	var_dump($_SESSION[$tokenSessionKey]);
-	// $newAccessToken = json_decode($client->getAccessToken());
-	// $newAccessToken = ($client->getAccessToken());
-	// $client->refreshToken($newAccessToken->refresh_token);
-	// $client->refreshToken($newAccessToken[$tokenSessionKey]]);
-	
-	$google_token = json_decode($_SESSION[$tokenSessionKey]);
-	$client->refreshToken($google_token->refresh_token);
-	$_SESSION[$tokenSessionKey] = $client->getAccessToken();
-	// Warning: json_decode() expects parameter 1 to be string, array given in D:\Dev\MyYoutubePrime\my-prime.php on line 73
-	// ( ! ) Notice: Trying to get property 'refresh_token' of non-object in D:\Dev\MyYoutubePrime\my-prime.php on line 74
-}*/
-
 // SQLite.
 try {
     $pdo = new PDO('sqlite:' . dirname(__FILE__) . '/my-prime.db');
@@ -326,8 +310,6 @@ END;
 			if ($strFilterType === '<' || $strFilterType === '>') {
 				$arrFilter = explode(" and ", $filter);
 				$arrFilter2 = explode(" or ", $filter);
-				// var_dump($arrFilter);
-				// var_dump($arrFilter2);
 				
 				if (isset($arrFilter2[1])) {
 					$strFilter .= " AND ({$arrFields[$key]} " . implode(" OR {$arrFields[$key]} ", $arrFilter2) . ") ";
@@ -344,19 +326,10 @@ END;
 					$strFilter .= " AND {$arrFields[$key]} NOT LIKE '%$strFilterSplit%'";
 				}
 			}  elseif ($strFilterType === "'") {
-				// $filter = trim($filter,'!()');
-				// $arrFilter = explode("|", $filter);
-				
-				// foreach ($arrFilter as $strFilterSplit) {
-					$strFilter .= " AND {$arrFields[$key]} ISNULL";
-				// }
+				$strFilter .= " AND {$arrFields[$key]} ISNULL";
 			} else {
 				$arrFilter = explode("|", $filter);
-				// if ($arrFields[$key] === "type2") {
-					// $strFilter .= " AND (channel_types.label LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%' OR channel_types.sort LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%')";
-				// } else {
 					$strFilter .= " AND ({$arrFields[$key]} LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%')";
-				// }
 			}
 		}
 	}
@@ -383,7 +356,6 @@ END;
 	
 $strFilter
 END;
-    // echo"<pre>";var_dump($sqlCount);
     $stmt = $pdo->prepare($sqlCount);
     $stmt->execute();
     $resCount = $stmt->fetch();
@@ -404,19 +376,12 @@ END;
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannels = $stmt->fetchAll();
-    // echo"<pre>";var_dump($sql);
-    // var_dump($resChannels);
     
     $arrTable = [];
     
     foreach ($resChannels as $row) {
 		if ($table == 'channels') {
-			// $type = $row['type'];
-			
-			// if ($type !== null) {
-				// $type = sprintf('%02d', $row['type']);	
-			// }
-			
+
 			$arrTable[] = [
 				$arrHeaders[0] => "<input type='checkbox'>",
 				$arrHeaders[1] => "<a href='https://www.youtube.com/channel/{$row['id']}' target='_blank'>{$row['name']}</a>",
@@ -529,7 +494,6 @@ function _updatePlaylists($service, $pdo, &$htmlBody, $myChannelId)
         
         $rspMyPlaylists = $service->playlists->listPlaylists('snippet', $paramMyPlaylists);
         $pageToken = $rspMyPlaylists->nextPageToken;
-        // var_dump($rspMyPlaylists[0]->snippet);
         
         
         foreach ($rspMyPlaylists->items as $playlist) {
@@ -614,8 +578,6 @@ OR id = 'PL52YqI0PbEYVG4sa24kHOAbEN7B3v4ZzZ'
 END;
 	}
     
-    // var_dump($sql);
-	// die;
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resPlaylists = $stmt->fetchAll();
@@ -629,12 +591,10 @@ END;
 				'pageToken' => $pageToken,
 				'playlistId' => $myPlaylist['id']
 			];
-			// var_dump($queryParams);
             
 			try {
 				$myPlaylistItems = $service->playlistItems->listPlaylistItems('contentDetails', $queryParams);
 				$pageToken = $myPlaylistItems->nextPageToken;
-				// var_dump($pageToken);
 			} catch (Exception $e) {
 				$myPlaylistItems = [];
 				$pageToken = null;
@@ -644,13 +604,9 @@ END;
             
             foreach ($myPlaylistItems as $myPlaylistItemDetails) {
                 $arrVideos[$myPlaylistItemDetails->contentDetails->videoId]['my_playlist_id'] = $myPlaylist['id'];
-				// var_dump($myPlaylistItemDetails);
             }
         }
     }
-	// var_dump($myPlaylistItems->pageInfo);
-	// var_dump($arrVideos);
-	// die;
     
     if (count($arrVideos) !== 0) {
         foreach ($arrVideos as $strVideoId => $strPlaylistId) {
@@ -661,7 +617,6 @@ END;
 	UPDATE SET my_playlist_id="{$strPlaylistId['my_playlist_id']}" 
 	WHERE id="$strVideoId";
 END;
-	// var_dump($arrVideos);
             $stmt = $pdo->prepare($sql);
             $stmt->execute();
         }
@@ -679,11 +634,7 @@ function _updateVideos($service, $pdo, &$htmlBody, $myChannelId)
 	$timeLimit = 400; // interval in seconds.
     
     $sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND status = 1 ORDER BY sort DESC;";
-    // $sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND status = 1 AND sort < 111;";
-    // $sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND status = 1 AND sort > 90 AND sort < 111;";
-    // $sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND status = 1 AND id = 'UCrbvoMC0zUvPL8vjswhLOSw';";
-    // var_dump($sql);
-	// die;
+ 
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannels = $stmt->fetchAll();
@@ -728,7 +679,6 @@ END;
 					'maxResults' => $dateDiff,
 					'pageToken' => $pageToken,
 				];
-				// var_dump($queryParams);
 
 				try {
 					$rspPlaylistItems = $service->playlistItems->listPlaylistItems('snippet', $queryParams);
@@ -739,6 +689,7 @@ END;
 					echo "can't find playlist_id: {$row['playlist_id']}<br>";
 				}
 				
+				// Speed-up: only last page
 				$pageToken = null;
 				
 				foreach ($rspPlaylistItems['items'] as $video) {
@@ -749,8 +700,6 @@ END;
 						'playlistId' => $row['playlist_id'],
 						'publishedAt' => $video->snippet->publishedAt,
 					];
-					
-					// echo $row['playlist_id'] . ': ' . $video->snippet->resourceId->videoId . '<br />';
 				}
 				
 				if (time() - $timeStart > $timeLimit) {
@@ -766,10 +715,6 @@ END;
 		}
 		
 		if (time() - $timeStart > $timeLimit) {
-			// var_dump($timeStart);
-			// var_dump(time());
-			// var_dump($timeStart - time());
-			// var_dump($video);
 			break;
 		}
     }
@@ -801,7 +746,6 @@ END;
 		var_dump($timeStart);
 		var_dump(time());
 		var_dump($timeStart - time());
-		// break;
 	}
 }
 
@@ -813,14 +757,13 @@ function _updateVideosDetails($service, $pdo, &$htmlBody, $myChannelId)
     $strVideos = '';
     $i = 0;
 	$timeStart = time();
-	$timeLimit = 400; // interval in seconds.
+	$timeLimit = 400;
     
     $sql = <<<END
 	SELECT videos.id FROM videos 
 	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
 	WHERE (my_playlist_id = 0 OR my_playlist_id IS NULL);
 END;
-	// var_dump($sql);
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resVideos = $stmt->fetchAll();
@@ -908,7 +851,6 @@ END;
         
         foreach ($rspVideos->items as $video) {
             $arrVideos2[$video->id]['duration'] = _covtime($video->contentDetails->duration);
-            // $arrVideos3[$video->id]['views'] = $video->statistics->viewCount;
         }
     }
 	
@@ -954,7 +896,6 @@ END;
         $rspVideos = $service->videos->listVideos('contentDetails,statistics', $queryParams);
         
         foreach ($rspVideos->items as $video) {
-            // $arrVideos2[$video->id]['duration'] = _covtime($video->contentDetails->duration);
             $arrVideos3[$video->id]['views'] = $video->statistics->viewCount;
         }
     }
@@ -1013,8 +954,6 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
         $strPlaylist = (isset($_POST['data'][4]) && $_POST['data'][4] !== '') ? $_POST['data'][4] : null;
         $strType = isset($_POST['data'][5]) ? $_POST['data'][5] : null;
         $strStatus = $strBtn == 'btnIgnore' ? -2 : 1;
-        // var_dump($_POST);
-		// die;
 		
         if ($strAction == '_listSubscriptions') {
             $strTable = 'channels';
@@ -1045,14 +984,12 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 			
 			if ($sql !== '') {
 				$i++;
-				// var_dump($sql);
 				$stmt = $pdo->prepare($sql);
 				$stmt->execute();
 			}
         }
         
         if (isset($strPlaylist)) {
-            // var_dump($strPlaylist);
             $arrReversedVideoId = array_reverse($arrVideoId);
             $playlistItem = new Google_Service_YouTube_PlaylistItem();
             $playlistItemSnippet = new Google_Service_YouTube_PlaylistItemSnippet();
@@ -1064,8 +1001,6 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
                 $resourceId->setVideoId($videoId);
                 $playlistItemSnippet->setResourceId($resourceId);
                 $playlistItem->setSnippet($playlistItemSnippet);
-                // var_dump($playlistItem);
-                // var_dump($videoId);
 				
 				try {
 					$response = $service->playlistItems->insert('snippet', $playlistItem);
