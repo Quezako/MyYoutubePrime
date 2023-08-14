@@ -634,7 +634,12 @@ function _updateVideos($service, $pdo, &$htmlBody, $myChannelId)
 	$timeLimit = 400; // interval in seconds.
 
 	$sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND status = 1 ORDER BY sort DESC;";
-
+	// EDIT: Update specific channels.
+	// $sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND (
+	// 	id = 'UCahRghBkidF24RvCXLL4ezA'
+	// 	OR id = 'UCsSsgPaZ2GSmO6il8Cb5iGA'
+	// ) ORDER BY sort DESC;";
+		
 	$stmt = $pdo->prepare($sql);
 	$stmt->execute();
 	$resChannels = $stmt->fetchAll();
@@ -667,9 +672,6 @@ END;
 			$dateDiff = 5000;
 		}
 
-		// $dateDiff = 5000;
-		// $dateDiff = 50;
-
 		if ($dateDiff > 0) {
 			$pageToken = "";
 
@@ -689,7 +691,7 @@ END;
 					echo "can't find playlist_id: {$row['playlist_id']}<br>";
 				}
 
-				// Speed-up: only last page
+				// EDIT: Speed-up: only last page.
 				$pageToken = null;
 
 				foreach ($rspPlaylistItems['items'] as $video) {
