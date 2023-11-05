@@ -462,11 +462,12 @@ function _updateSubscriptions($service, $pdo, &$htmlBody, $myChannelId)
 	}
 
 	foreach ($arrMySubscriptions as $mySubscriptionId => $mySubscription) {
+		$title = str_replace('"', '""', $mySubscription['title']);
 		$sql = <<<END
 	INSERT INTO channels (id, name, playlist_id, account, subs) 
-	VALUES ("$mySubscriptionId", "{$mySubscription['title']}", "{$mySubscription['uploads']}", "$myChannelId", "{$mySubscription['subs']}")
+	VALUES ("$mySubscriptionId", "{$title}", "{$mySubscription['uploads']}", "$myChannelId", "{$mySubscription['subs']}")
 	ON CONFLICT(id) DO UPDATE SET 
-	name = "{$mySubscription['title']}",
+	name = "{$title}",
 	playlist_id = "{$mySubscription['uploads']}",
 	account = "$myChannelId",
 	subs = "{$mySubscription['subs']}"
