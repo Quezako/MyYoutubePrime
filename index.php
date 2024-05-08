@@ -40,6 +40,7 @@ if (isset($_COOKIE['radio_music']) && $_COOKIE['radio_music'] == '{"checked":tru
 	$myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
 } else {
 	$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
+	// $myChannelId = 'UCXjJIMHXcMf4-zg8ppOgyyw'; // Quezako
 }
 
 if (isset($_GET['code'])) {
@@ -55,15 +56,7 @@ if (isset($_GET['code'])) {
 if (isset($_SESSION[$tokenSessionKey])) {
     $client->setAccessToken($_SESSION[$tokenSessionKey]);
 }
-/*
-if ($client->isAccessTokenExpired()) {
-	// var_dump($client->getAccessToken());
-	// $newAccessToken = json_decode($client->getAccessToken());
-	$newAccessToken = ($client->getAccessToken());
-	// $client->refreshToken($newAccessToken->refresh_token);
-	$client->refreshToken($newAccessToken['access_token']);
-}
-*/
+
 // SQLite.
 try {
     $pdo = new PDO('sqlite:' . dirname(__FILE__) . '/my-prime.db');
@@ -76,7 +69,7 @@ try {
 
 // Check to ensure that the access token was successfully acquired.// Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
-	if (!isset($_GET['action']) || !in_array($_GET['action'],['_listSubscriptions', '_listPlaylists', '_listVideos', '_ajaxUpdate'])) {
+	if (!isset($_GET['action']) || !in_array($_GET['action'],['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2', '_ajaxUpdate'])) {
 		try {
 			_getMyChannelId($service, $myChannelId);
 		} catch (Google_Service_Exception $e) {
@@ -84,7 +77,7 @@ if ($client->getAccessToken()) {
 				'<p>A Google_Service_Exception error occurred: <code>%s</code></p>',
 				($e->getMessage())
 			);
-			
+
 			if (in_array($e->getCode(), [401])) {
 				_showAuth($client, $htmlBody);
 			}
@@ -100,7 +93,7 @@ if ($client->getAccessToken()) {
 			);
 		}
 	}
-	
+
 	if (isset($_GET['action'])) {
 		switch ($_GET['action']) {
 			case '_listSubscriptions':
@@ -110,11 +103,12 @@ if ($client->getAccessToken()) {
 				_listPlaylists($service, $pdo, $htmlTable, $myChannelId);
 				break;
 			case '_listVideos':
+			case '_listVideos2':
 				_listVideos($service, $pdo, $htmlTable, $htmlSelect, $myChannelId);
 				break;
 		}
 	}
-	
+
     $_SESSION[$tokenSessionKey] = $client->getAccessToken();
 } elseif ($OAUTH2_CLIENT_ID == 'REPLACE_ME') {
     echo <<<END
@@ -151,11 +145,12 @@ function _getMyChannelId($service, &$myChannelId)
     ];
 
     $rspMyChannel = $service->channels->listChannels('id', $queryParams);
-	
+
 	if (isset($_COOKIE['radio_music']) && $_COOKIE['radio_music'] == '{"checked":true}') {
 		$myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
 	} else {
 		$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
+		// $myChannelId = 'UCXjJIMHXcMf4-zg8ppOgyyw'; // Quezako
 	}
 }
 
@@ -166,7 +161,7 @@ function _covtime($youtube_time)
         $start->add(new DateInterval($youtube_time));
         $youtube_time = round($start->getTimestamp() / 60, 0);
     }
-    
+
     return $youtube_time;
 }
 
@@ -177,15 +172,15 @@ function _listSubscriptions($service, $pdo, &$htmlTable, $myChannelId, &$htmlSel
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannelTypes = $stmt->fetchAll();
-    
+
     $htmlSelect = '<select name="selChannelTypes" id="selChannelTypes">';
-    
+
     foreach ($resChannelTypes as $row) {
         $htmlSelect .= "<option value='{$row["id"]}'>{$row["label"]}</option>";
     }
-    
+
     $htmlSelect .= '</select>';
-    
+
     $htmlTable = <<<END
 	<table id="tblSubs_$myChannelId" class="table table-bordered table-striped">
 		<thead class="thead-dark">
@@ -245,17 +240,18 @@ function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId)
 END;
 
     // select list: playlists.
-    $sql = "SELECT id, name FROM playlists WHERE account = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+    // $sql = "SELECT id, name FROM playlists WHERE account = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+    $sql = "SELECT id, name FROM playlists WHERE account = 'UCXjJIMHXcMf4-zg8ppOgyyw' AND status > 0 ORDER BY sort ASC LIMIT 200;";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannels = $stmt->fetchAll();
 
     $htmlSelect = '<select name="selPlaylist" id="selPlaylist">';
-    
+
     foreach ($resChannels as $row) {
         $htmlSelect .= "<option value='{$row["id"]}'>{$row["name"]}</option>";
     }
-    
+
     $htmlSelect .= '</select>';
 }
 ?>
@@ -265,7 +261,7 @@ END;
 		<meta charset="UTF-8">
 		<title>My Prime</title>
 		<link rel="shortcut icon" type="image/ico" href="assets/favicon/favicon.ico"/>
-		
+
 		<!-- Tablesorter: required -->
 		<script src="js/jquery-latest.min.js"></script>
 		<script src="js/jquery.tablesorter.min.js"></script>
@@ -283,13 +279,13 @@ END;
 		<script src="js/widgets/widget-filter.min.js"></script>
 		<script src="js/widgets/widget-storage.js"></script>
 		<script src="js/extras/jquery.tablesorter.pager.min.js"></script>
-		
+
 		<!-- DRAG -->
 		<script src="js/jquery-ui.min.js"></script>
-		
+
 		<!-- COOKIES -->
 		<script src="js/js.cookie-2.2.1.min.js"></script>
-		
+
 		<!-- My Prime -->
 		<link rel="stylesheet" href="css/my-prime.css">
 		<script src="js/my-prime.js"></script>
@@ -316,6 +312,9 @@ END;
 				<li class="nav-item">
 					<a class="nav-link" href="?action=_listVideos">📖Tracks</a>
 				</li>
+				<li class="nav-item">
+					<a class="nav-link" href="?action=_listVideos2">📖Tracks 2</a>
+				</li>
 			</ul>
 			&nbsp;&nbsp;&nbsp;Update&nbsp;&nbsp;
 			<div class="btn-group" role="group" aria-label="Basic example">
@@ -339,44 +338,6 @@ END;
 			<?php
             if (in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos'])) {
                 ?>
-				Filters:
-				<select id="selFilter" class="form-control-sm">
-					<option value="">-----</option>
-					<?php
-					// select list: playlists.
-					$sql = "SELECT * FROM filters WHERE account = '$myChannelId' ORDER BY sort ASC";
-					$stmt = $pdo->prepare($sql);
-					$stmt->execute();
-					$resChannels = $stmt->fetchAll();
-					
-					foreach ($resChannels as $row) {
-						echo "<option value=\"{$row["rules"]}^{$row["playlist"]}\">{$row["label"]}</option>";
-					}
-					?>
-				</select>
-				<div class="pager ts-pager">
-					<div class="form-inline">
-						<div class="btn-group btn-group-sm mx-1" role="group">
-							<button type="button" class="btn btn-secondary first" title="first">⇤</button>
-							<button type="button" class="btn btn-secondary prev" title="previous">←</button>
-						</div>
-						<span class="pagedisplay"></span>
-						<div class="btn-group btn-group-sm mx-1" role="group">
-							<button type="button" class="btn btn-secondary next" title="next">→</button>
-							<button type="button" class="btn btn-secondary last" title="last">⇥</button>
-						</div>
-						<select class="form-control-sm mx-1 pagesize" title="Select page size">
-							<option value="50">50</option>
-							<option value="100">100</option>
-							<option value="200">200</option>
-							<option value="500">500</option>
-							<option value="1000">1000</option>
-							<option value="all">All Rows</option>
-						</select>
-						<select class="form-control-sm mx-1 pagenum gotoPage" title="Select page number"></select>
-					</div>
-				</div>
-				
 				<div class="btn-group" role="group" aria-label="Basic example">
 					<button type="button" id="btnCheck" class="btn btn-dark"><input type='checkbox' id='checkAll' /> Check All </button>
 					<button type="button" id="btnIgnore" class="btn btn-dark">Hide selected</button>
@@ -400,10 +361,47 @@ END;
 					<?php
 					} ?>
 				</div>
-			
+				<div class="pager ts-pager">
+					<div class="form-inline">
+						<div class="btn-group btn-group-sm mx-1" role="group">
+							<button type="button" class="btn btn-secondary first" title="first">⇤</button>
+							<button type="button" class="btn btn-secondary prev" title="previous">←</button>
+						</div>
+						<span class="pagedisplay"></span>
+						<div class="btn-group btn-group-sm mx-1" role="group">
+							<button type="button" class="btn btn-secondary next" title="next">→</button>
+							<button type="button" class="btn btn-secondary last" title="last">⇥</button>
+						</div>
+						<select class="form-control-sm mx-1 pagesize" title="Select page size">
+							<option value="50">50</option>
+							<option value="100">100</option>
+							<option value="200">200</option>
+							<option value="500">500</option>
+							<option value="1000">1000</option>
+							<option value="all">All Rows</option>
+						</select>
+						<select class="form-control-sm mx-1 pagenum gotoPage" title="Select page number"></select>
+					</div>
+				</div>
+				Filters:
+				<select id="selFilter" class="form-control-sm">
+					<option value="">-----</option>
+					<?php
+					// select list: playlists.
+					$sql = "SELECT * FROM filters WHERE account = '$myChannelId' ORDER BY sort ASC";
+					$stmt = $pdo->prepare($sql);
+					$stmt->execute();
+					$resChannels = $stmt->fetchAll();
+
+					foreach ($resChannels as $row) {
+						echo "<option value=\"{$row["rules"]}^{$row["playlist"]}\">{$row["label"]}</option>";
+					}
+					?>
+				</select>
+
 			<?php
             }
-            
+
             echo $htmlTable;
             ?>
 		</div>

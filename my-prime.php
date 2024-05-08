@@ -41,6 +41,7 @@ $htmlBody = '';
 $htmlTable = '';
 $htmlSelect = '';
 $myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g';
+// $myChannelId = 'UCXjJIMHXcMf4-zg8ppOgyyw';
 
 // Check if an auth token exists for the required scopes
 $tokenSessionKey = 'token-' . $client->prepareScopes();
@@ -72,7 +73,7 @@ try {
 // Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
 	if (isset($_GET['action'])) {
-		if (!in_array($_GET['action'], ['_listSubscriptions', '_listPlaylists', '_listVideos', '_ajaxUpdate'])) {
+		if (!in_array($_GET['action'], ['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2', '_ajaxUpdate'])) {
 			try {
 				_getMyChannelId($service, $myChannelId);
 			} catch (Google_Service_Exception $e) {
@@ -101,6 +102,7 @@ if ($client->getAccessToken()) {
 			case '_listSubscriptions':
 			case '_listPlaylists':
 			case '_listVideos':
+			case '_listVideos2':
 				_list($pdo, $myChannelId);
 				break;
 			case '_updateSubscriptions':
@@ -171,6 +173,7 @@ function _getMyChannelId($service, &$myChannelId)
 		$myChannelId = 'UCjp4sUlXfWngnLyPfA5SrIQ'; // Music
 	} else {
 		$myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g'; // Quezako
+		// $myChannelId = 'UCXjJIMHXcMf4-zg8ppOgyyw'; // Quezako
 	}
 }
 
@@ -213,14 +216,14 @@ function _list($pdo, $myChannelId)
 		$sqlCount = <<<END
 SELECT count(*) AS count
 FROM channels
-LEFT JOIN channel_types ON channels.type = channel_types.id 
+LEFT JOIN channel_types ON channels.type = channel_types.id
 WHERE channels.account = '$myChannelId'
 END;
 		$sql = <<<END
 SELECT channels.*, channel_types.label, substr('0000'||channel_types.sort, -4, 4) || "_" || channel_types.label AS type2
-FROM channels 
-LEFT JOIN channel_types ON channels.type = channel_types.id 
-WHERE channels.account = '$myChannelId' 
+FROM channels
+LEFT JOIN channel_types ON channels.type = channel_types.id
+WHERE channels.account = '$myChannelId'
 END;
 	} elseif ($_GET['action'] == '_listPlaylists') {
 		$table = 'playlists';
@@ -242,9 +245,9 @@ FROM playlists
 WHERE playlists.account = '$myChannelId'
 END;
 		$sql = <<<END
-SELECT * 
-FROM playlists 
-WHERE account = '$myChannelId' 
+SELECT *
+FROM playlists
+WHERE account = '$myChannelId'
 -- ORDER BY sort ASC
 -- LIMIT 200;
 END;
@@ -272,27 +275,73 @@ END;
 		];
 		$sqlCount = <<<END
 SELECT count(*) AS count
-FROM videos 
+FROM videos
 INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
 LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
-LEFT JOIN channel_types ON channels.type = channel_types.id 
-WHERE channels.status > 0 
-	AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL) 
+LEFT JOIN channel_types ON channels.type = channel_types.id
+WHERE channels.status > 0
+	AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL)
 	AND (videos.status <> -2 OR videos.status IS NULL)
 END;
 		$sql = <<<END
-SELECT 
+SELECT
 	videos.*, channel_types.label, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
 	playlists.name AS my_playlist_name, channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
-FROM videos 
+FROM videos
 INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
 LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
-LEFT JOIN channel_types ON channels.type = channel_types.id 
-WHERE channels.status > 0 
-	AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL) 
+LEFT JOIN channel_types ON channels.type = channel_types.id
+WHERE channels.status > 0
+	AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL)
 	AND (videos.status <> -2 OR videos.status IS NULL)
 -- ORDER BY channel_sort ASC, SUBSTR(videos.date_published, 0, 8) DESC, CAST(duration AS INT) ASC
 -- LIMIT 1000;
+END;
+	} elseif ($_GET['action'] == '_listVideos2') {
+		$table = 'videos';
+		$arrHeaders = [
+			"Action",
+			"Channel",
+			"Video",
+			"Duration",
+			"Priority",
+			"Published",
+			"Type",
+			"Views",
+		];
+		$arrFields = [
+			"id",
+			"channels.name",
+			"title",
+			"duration",
+			"channels.sort",
+			"date_published",
+			"channel_types.label",
+			"views",
+		];
+		$sqlCount = <<<END
+SELECT count(*) AS count
+FROM videos
+INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
+LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
+LEFT JOIN channel_types ON channels.type = channel_types.id
+WHERE 1=1
+AND channels.status > 0
+	AND (videos.my_playlist_id <> 0 AND videos.my_playlist_id <> 1 AND videos.my_playlist_id <> -1)
+	AND (videos.status IS NULL)
+END;
+		$sql = <<<END
+		SELECT
+		videos.*, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk
+		,channel_types.label, playlists.name AS my_playlist_name, channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
+	FROM videos
+	INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
+	LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
+	LEFT JOIN channel_types ON channels.type = channel_types.id
+	WHERE 1=1
+	AND channels.status > 0
+		AND (videos.my_playlist_id <> 0 AND videos.my_playlist_id <> 1 AND videos.my_playlist_id <> -1)
+		AND (videos.status IS NULL)
 END;
 	}
 
@@ -353,7 +402,7 @@ END;
 	}
 
 	$sqlCount .= <<<END
-	
+
 $strFilter
 END;
 	$stmt = $pdo->prepare($sqlCount);
@@ -368,7 +417,7 @@ END;
 		$rowCount = $_GET['size'];
 	}
 	$sql .= <<<END
-	
+
 $strFilter
 $strSort
 LIMIT {$offset}, {$rowCount};
@@ -464,9 +513,9 @@ function _updateSubscriptions($service, $pdo, &$htmlBody, $myChannelId)
 	foreach ($arrMySubscriptions as $mySubscriptionId => $mySubscription) {
 		$title = str_replace('"', '""', $mySubscription['title']);
 		$sql = <<<END
-	INSERT INTO channels (id, name, playlist_id, account, subs) 
+	INSERT INTO channels (id, name, playlist_id, account, subs)
 	VALUES ("$mySubscriptionId", "{$title}", "{$mySubscription['uploads']}", "$myChannelId", "{$mySubscription['subs']}")
-	ON CONFLICT(id) DO UPDATE SET 
+	ON CONFLICT(id) DO UPDATE SET
 	name = "{$title}",
 	playlist_id = "{$mySubscription['uploads']}",
 	account = "$myChannelId",
@@ -507,9 +556,9 @@ function _updatePlaylists($service, $pdo, &$htmlBody, $myChannelId)
 
 	foreach ($arrMyPlaylists as $myPlaylistId => $myPlaylist) {
 		$sql = <<<END
-	INSERT OR IGNORE INTO playlists (id, name, account) 
+	INSERT OR IGNORE INTO playlists (id, name, account)
 	VALUES ("$myPlaylistId", "{$myPlaylist['title']}", "{$myPlaylist['channel']}")
-	ON CONFLICT(id) DO 
+	ON CONFLICT(id) DO
 	UPDATE SET
 	name = "{$myPlaylist['title']}",
 	account = "{$myPlaylist['channel']}"
@@ -528,54 +577,17 @@ function _updatePlaylistsDetails($service, $pdo, &$htmlBody, $myChannelId)
 
 	if ($myChannelId == 'UCjp4sUlXfWngnLyPfA5SrIQ') {
 		$sql = <<<END
-SELECT id FROM playlists 
-WHERE id = 'PLPjkJ-eKlc2yp5mv6wuVo_UfhT2ZsZk5m' 
+SELECT id FROM playlists
+WHERE id = 'PLPjkJ-eKlc2yp5mv6wuVo_UfhT2ZsZk5m'
 OR id = 'PLPjkJ-eKlc2zjByQjtI1M8ELC8TBeb2DN';
 OR id = 'PLPjkJ-eKlc2z1Hf-JY3WRmTUUGlMkGav6';
 END;
 	} else {
 		$sql = <<<END
-SELECT id FROM playlists 
+SELECT id FROM playlists
 WHERE 1 = 0
-OR id = 'PL52YqI0PbEYWESzZ97h5QzCIoKo9OZlhI'
-OR id = 'PL52YqI0PbEYWZ5aorN_KSeHvVeUcrr8H6'
-OR id = 'PL52YqI0PbEYUxtItqu6WAIqj1C7hX4LUL'
-OR id = 'PL52YqI0PbEYV_g-5wdATX6GV7QPXvPadH'
-OR id = 'PL52YqI0PbEYXzJuYKJFyCCu1lREuoMhnO'
-OR id = 'PL52YqI0PbEYX2s-juEdNuXCyY-GUvSVor'
-OR id = 'PL52YqI0PbEYU5t0I78FhbXfeexjksd5D0'
-OR id = 'PL52YqI0PbEYW5hDkfG_5AaOLz--xroo-i'
-OR id = 'PL52YqI0PbEYU5l8BMJiMAEJO6owe7Tjvl'
-OR id = 'PL52YqI0PbEYXUDQbgy-ucXFLYk-LTdc4o'
-OR id = 'PL52YqI0PbEYX18AmDYyv1lx28lIzwYgTb'
-OR id = 'PL52YqI0PbEYWdYWfZIDSb9d4TLcwTHFNM'
-OR id = 'PL52YqI0PbEYU1_3bne33bXQYAviFN8AD4'
-OR id = 'PL52YqI0PbEYXZv2APe7B3wPkgdVXi1yK7'
-OR id = 'PL52YqI0PbEYXY2mIqhMzRQlYlSk_qjipA'
-OR id = 'PL52YqI0PbEYWYGVaDb7WaotZw1-DqeIbt'
-OR id = 'PL52YqI0PbEYXMGfA71veOZCM_4NAWVopj'
-OR id = 'PL52YqI0PbEYV-CR9Y8gOO1TlanC6VHpBV'
-OR id = 'PL52YqI0PbEYWZxaXbsJRgKSLlvL-Caj0m'
-OR id = 'PL52YqI0PbEYWqnBLaviFHouJHNYj_gNmY'
-OR id = 'PL52YqI0PbEYXTcfJc2988HdNXTuNz_R46'
-OR id = 'PL52YqI0PbEYUTr_Wnjip5_p5ue0E-60Aj'
-OR id = 'PL52YqI0PbEYWHvaMgh19UXBNqB-K8CmLB'
-OR id = 'PL52YqI0PbEYVjeAuX3CMF9ky1rmAQLADN'
-OR id = 'PL52YqI0PbEYXfVltmvdm2OrgB58SYLpzI'
-OR id = 'PL52YqI0PbEYWFKKOwPJxMXdTi7IhEb_e5'
-OR id = 'FLDhEgLlKq6teYnMOUS3MZ_g'
-OR id = 'PL52YqI0PbEYUdPJEVeMbzMujHNDHbJUPi'
-OR id = 'PL52YqI0PbEYXaL5E8EiraX6wdEC98Q7XX'
-OR id = 'PL52YqI0PbEYWdzx7RrT2h6bp7cb5uYq7C'
-OR id = 'PL52YqI0PbEYXpDVrt6oQBeJDUkzOkOKGc'
-OR id = 'PL52YqI0PbEYVG4sa24kHOAbEN7B3v4ZzZ'
-OR id = 'PL52YqI0PbEYW-NsQxLQWpSVE-aVBS53pH'
--- OR id = 'PL52YqI0PbEYUTVvCGhOpiDaq0NsRHbEIk'
--- OR id = 'PL52YqI0PbEYUqv-NNv4pKY7Hmd_fsftaL'
--- OR id = 'PL52YqI0PbEYVcJePTrwQ5wbVvh25ThpHy'
--- OR id = 'PL52YqI0PbEYVA1jSoAyGEOQZMdOaOlL-C'
--- OR id = 'PL52YqI0PbEYVrIe5j_v6EPoK9V59AaN9d'
--- OR id = 'PL52YqI0PbEYWUtAjS-edI4qZmyWQMTVTB'
+OR id = 'PLr47OOfaVQapufxfcHsSgKxyEtoH0zZRy'
+OR id = 'PLr47OOfaVQaq7mCio8tKQqx1udGOrkQZ9'
 ;
 END;
 	}
@@ -613,10 +625,10 @@ END;
 	if (count($arrVideos) !== 0) {
 		foreach ($arrVideos as $strVideoId => $strPlaylistId) {
 			$sql = <<<END
-	INSERT INTO videos (id, my_playlist_id) 
+	INSERT INTO videos (id, my_playlist_id)
 	VALUES ("{$strVideoId}", "{$strPlaylistId['my_playlist_id']}")
-	ON CONFLICT(id) DO 
-	UPDATE SET my_playlist_id="{$strPlaylistId['my_playlist_id']}" 
+	ON CONFLICT(id) DO
+	UPDATE SET my_playlist_id="{$strPlaylistId['my_playlist_id']}"
 	WHERE id="$strVideoId";
 END;
 			$stmt = $pdo->prepare($sql);
@@ -641,16 +653,16 @@ function _updateVideos($service, $pdo, &$htmlBody, $myChannelId)
 	// 	id = 'UCahRghBkidF24RvCXLL4ezA'
 	// 	OR id = 'UCsSsgPaZ2GSmO6il8Cb5iGA'
 	// ) ORDER BY sort DESC;";
-		
+
 	$stmt = $pdo->prepare($sql);
 	$stmt->execute();
 	$resChannels = $stmt->fetchAll();
 
 	$sql = <<<END
 SELECT * FROM (
-	SELECT videos.playlist_id, videos.date_checked 
+	SELECT videos.playlist_id, videos.date_checked
 	FROM videos
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId'
 	ORDER BY videos.date_checked DESC
 ) GROUP BY playlist_id;
 END;
@@ -727,9 +739,9 @@ END;
 		foreach ($arrVideos as $arrSqlVideosId => $strSqlVideos) {
 			$title = str_replace('"', '""', $strSqlVideos['title']);
 			$sql = <<<END
-	INSERT INTO videos (id, playlist_id, title, date_published, date_checked) 
+	INSERT INTO videos (id, playlist_id, title, date_published, date_checked)
 	VALUES ("$arrSqlVideosId", "{$strSqlVideos['playlistId']}", "{$title}", "{$strSqlVideos['publishedAt']}", "{$now->format('Y-m-d\TH:i:s\Z')}")
-	ON CONFLICT(id) DO UPDATE SET 
+	ON CONFLICT(id) DO UPDATE SET
 	playlist_id = "{$strSqlVideos['playlistId']}",
 	title = "{$title}",
 	date_published = "{$strSqlVideos['publishedAt']}",
@@ -764,8 +776,8 @@ function _updateVideosDetails($service, $pdo, &$htmlBody, $myChannelId)
 	$timeLimit = 400;
 
 	$sql = <<<END
-	SELECT videos.id FROM videos 
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
+	SELECT videos.id FROM videos
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId'
 	WHERE (my_playlist_id = 0 OR my_playlist_id IS NULL);
 END;
 	$stmt = $pdo->prepare($sql);
@@ -817,7 +829,7 @@ END;
 	// Duration
 	$sql = <<<END
 	SELECT videos.id FROM videos
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId'
 	WHERE duration IS NULL
 	-- LIMIT 1000;
 END;
@@ -863,7 +875,7 @@ END;
 	$i = 0;
 	$sql = <<<END
 	SELECT videos.id FROM videos
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId' 
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId'
 	WHERE views IS NULL
 	-- LIMIT 1000;
 END;
@@ -964,6 +976,8 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 		} elseif ($strAction == '_listPlaylists') {
 			$strTable = 'playlists';
 		} elseif ($strAction == '_listVideos') {
+			$strTable = 'videos';
+		} elseif ($strAction == '_listVideos2') {
 			$strTable = 'videos';
 		}
 
