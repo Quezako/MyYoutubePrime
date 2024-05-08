@@ -262,6 +262,7 @@ END;
 			"Published",
 			"Type",
 			"Views",
+			"Playlist",
 		];
 		$arrFields = [
 			"id",
@@ -272,6 +273,7 @@ END;
 			"date_published",
 			"channel_types.label",
 			"views",
+			"playlists.name",
 		];
 		$sqlCount = <<<END
 SELECT count(*) AS count
@@ -308,6 +310,7 @@ END;
 			"Published",
 			"Type",
 			"Views",
+			"Playlist",
 		];
 		$arrFields = [
 			"id",
@@ -318,6 +321,7 @@ END;
 			"date_published",
 			"channel_types.label",
 			"views",
+			"playlists.name",
 		];
 		$sqlCount = <<<END
 SELECT count(*) AS count
@@ -459,6 +463,7 @@ END;
 				$arrHeaders[5] => "{$row['date_published']}",
 				$arrHeaders[6] => "{$row['label']}",
 				$arrHeaders[7] => "{$row['views']}",
+				$arrHeaders[8] => "{$row['my_playlist_name']}",
 			];
 		}
 	}

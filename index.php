@@ -232,6 +232,7 @@ function _listVideos($service, $pdo, &$htmlTable, &$htmlSelect, $myChannelId)
 				<th class="group-date-day">Published</th>
 				<th class="group-letter-1">Type</th>
 				<th class="group-Number-1">Views</th>
+				 <th class="group-letter-1">Playlist</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -336,7 +337,7 @@ END;
         ?>
 		<div class="<?=$action?>">
 			<?php
-            if (in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos'])) {
+            if (in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2'])) {
                 ?>
 				<div class="btn-group" role="group" aria-label="Basic example">
 					<button type="button" id="btnCheck" class="btn btn-dark"><input type='checkbox' id='checkAll' /> Check All </button>
