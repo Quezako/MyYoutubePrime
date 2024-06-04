@@ -311,10 +311,10 @@ END;
 					<a class="nav-link" href="?action=_listPlaylists">🔀Playlists</a>
 				</li>
 				<li class="nav-item">
-					<a class="nav-link" href="?action=_listVideos">📖Tracks</a>
+					<a class="nav-link" href="?action=_listVideos2">📖Tracks 2</a>
 				</li>
 				<li class="nav-item">
-					<a class="nav-link" href="?action=_listVideos2">📖Tracks 2</a>
+					<a class="nav-link" href="?action=_listVideos">📖Tracks</a>
 				</li>
 			</ul>
 			&nbsp;&nbsp;&nbsp;Update&nbsp;&nbsp;
