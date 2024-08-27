@@ -242,7 +242,8 @@ END;
 
     // select list: playlists.
     // $sql = "SELECT id, name FROM playlists WHERE account = '$myChannelId' AND status > 0 ORDER BY sort ASC LIMIT 200;";
-    $sql = "SELECT id, name FROM playlists WHERE account = 'UCXjJIMHXcMf4-zg8ppOgyyw' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+    // $sql = "SELECT id, name FROM playlists WHERE account = 'UCXjJIMHXcMf4-zg8ppOgyyw' AND status > 0 ORDER BY sort ASC LIMIT 200;";
+    $sql = "SELECT id, name FROM playlists WHERE account = 'UCOZMyGfU_3ZRESYpESQlNHw' AND status > 0 ORDER BY sort ASC LIMIT 200;";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $resChannels = $stmt->fetchAll();

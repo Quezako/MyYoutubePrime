@@ -591,8 +591,9 @@ END;
 		$sql = <<<END
 SELECT id FROM playlists
 WHERE 1 = 0
-OR id = 'PLr47OOfaVQapufxfcHsSgKxyEtoH0zZRy'
-OR id = 'PLr47OOfaVQaq7mCio8tKQqx1udGOrkQZ9'
+-- OR id = 'PLr47OOfaVQapufxfcHsSgKxyEtoH0zZRy'
+-- OR id = 'PLr47OOfaVQaq7mCio8tKQqx1udGOrkQZ9'
+OR id = 'PLEjl_TcldXh9dZTlnkhlJRGUKGWRv4HNo'
 ;
 END;
 	}
