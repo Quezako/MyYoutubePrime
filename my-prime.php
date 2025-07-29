@@ -64,7 +64,9 @@ if (isset($_SESSION[$tokenSessionKey])) {
 try {
 	$pdo = new PDO('sqlite:' . dirname(__FILE__) . '/my-prime.db');
 	$pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-	$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
+	// $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
+	$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+	$pdo->setAttribute(PDO::ATTR_PERSISTENT, true);
 } catch (Exception $e) {
 	echo "Can't access SQLite DB: " . $e->getMessage();
 	die();
@@ -217,13 +219,13 @@ function _list($pdo, $myChannelId)
 SELECT count(*) AS count
 FROM channels
 LEFT JOIN channel_types ON channels.type = channel_types.id
-WHERE channels.account = '$myChannelId'
+WHERE channels.account LIKE '$myChannelId'
 END;
 		$sql = <<<END
 SELECT channels.*, channel_types.label, substr('0000'||channel_types.sort, -4, 4) || "_" || channel_types.label AS type2
 FROM channels
 LEFT JOIN channel_types ON channels.type = channel_types.id
-WHERE channels.account = '$myChannelId'
+WHERE channels.account LIKE '$myChannelId'
 END;
 	} elseif ($_GET['action'] == '_listPlaylists') {
 		$table = 'playlists';
@@ -242,12 +244,12 @@ END;
 		$sqlCount = <<<END
 SELECT count(*) AS count
 FROM playlists
-WHERE playlists.account = '$myChannelId'
+WHERE playlists.account LIKE '$myChannelId'
 END;
 		$sql = <<<END
 SELECT *
 FROM playlists
-WHERE account = '$myChannelId'
+WHERE account LIKE '$myChannelId'
 -- ORDER BY sort ASC
 -- LIMIT 200;
 END;
@@ -278,8 +280,8 @@ END;
 		$sqlCount = <<<END
 SELECT count(*) AS count
 FROM videos
-INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
-LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
+INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account LIKE '$myChannelId'
+LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account LIKE '$myChannelId'
 LEFT JOIN channel_types ON channels.type = channel_types.id
 WHERE channels.status > 0
 	AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL)
@@ -290,8 +292,8 @@ SELECT
 	videos.*, channel_types.label, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk,
 	playlists.name AS my_playlist_name, channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
 FROM videos
-INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
-LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
+INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account LIKE '$myChannelId'
+LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account LIKE '$myChannelId'
 LEFT JOIN channel_types ON channels.type = channel_types.id
 WHERE channels.status > 0
 	AND (videos.my_playlist_id = 0 OR videos.my_playlist_id IS NULL)
@@ -326,8 +328,8 @@ END;
 		$sqlCount = <<<END
 SELECT count(*) AS count
 FROM videos
-INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
-LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
+INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account LIKE '$myChannelId'
+LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account LIKE '$myChannelId'
 LEFT JOIN channel_types ON channels.type = channel_types.id
 WHERE 1=1
 AND channels.status > 0
@@ -339,8 +341,8 @@ END;
 		videos.*, SUBSTR(videos.date_published, 0, 8) AS video_date_pub, SUBSTR(videos.date_checked, 0, 11) AS video_date_chk
 		,channel_types.label, playlists.name AS my_playlist_name, channels.name AS channel_name, channels.id AS channel_id, channels.sort AS channel_sort
 	FROM videos
-	INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account = '$myChannelId'
-	LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account = '$myChannelId'
+	INNER JOIN channels ON videos.playlist_id = channels.playlist_id AND channels.account LIKE '$myChannelId'
+	LEFT JOIN playlists ON videos.my_playlist_id = playlists.id AND playlists.account LIKE '$myChannelId'
 	LEFT JOIN channel_types ON channels.type = channel_types.id
 	WHERE 1=1
 	AND channels.status > 0
@@ -653,9 +655,9 @@ function _updateVideos($service, $pdo, &$htmlBody, $myChannelId)
 	$timeStart = time();
 	$timeLimit = 400; // interval in seconds.
 
-	$sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND status = 1 ORDER BY sort DESC;";
+	$sql = "SELECT playlist_id FROM channels WHERE account LIKE '$myChannelId' AND status = 1 ORDER BY sort DESC;";
 	// EDIT: Update specific channels.
-	// $sql = "SELECT playlist_id FROM channels WHERE account = '$myChannelId' AND (
+	// $sql = "SELECT playlist_id FROM channels WHERE account LIKE '$myChannelId' AND (
 	// 	id = 'UCahRghBkidF24RvCXLL4ezA'
 	// 	OR id = 'UCsSsgPaZ2GSmO6il8Cb5iGA'
 	// ) ORDER BY sort DESC;";
@@ -664,18 +666,21 @@ function _updateVideos($service, $pdo, &$htmlBody, $myChannelId)
 	$stmt->execute();
 	$resChannels = $stmt->fetchAll();
 
+	// patch : add LIMIT 9810, otherwise "unable to open database file".
 	$sql = <<<END
 SELECT * FROM (
-	SELECT videos.playlist_id, videos.date_checked
+	SELECT videos.playlist_id, videos.date_checked, channels.account
 	FROM videos
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId'
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id
 	ORDER BY videos.date_checked DESC
-) GROUP BY playlist_id;
+	LIMIT 1000
+) WHERE account LIKE '$myChannelId' GROUP BY playlist_id;
 END;
 	// var_dump($sql);
 	$stmt = $pdo->prepare($sql);
 	$stmt->execute();
 	$resVideos = $stmt->fetchAll();
+	// die;
 
 	$arrVideos = [];
 	$arrStoredVideos = [];
@@ -782,9 +787,10 @@ function _updateVideosDetails($service, $pdo, &$htmlBody, $myChannelId)
 	$timeLimit = 400;
 
 	$sql = <<<END
-	SELECT videos.id FROM videos
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId'
-	WHERE (my_playlist_id = 0 OR my_playlist_id IS NULL);
+	SELECT * FROM (SELECT videos.id, channels.account FROM videos
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id
+	WHERE (my_playlist_id = 0 OR my_playlist_id IS NULL)
+	) WHERE account LIKE "$myChannelId";
 END;
 	$stmt = $pdo->prepare($sql);
 	$stmt->execute();
@@ -835,7 +841,7 @@ END;
 	// Duration
 	$sql = <<<END
 	SELECT videos.id FROM videos
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId'
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account LIKE '$myChannelId'
 	WHERE duration IS NULL
 	-- LIMIT 1000;
 END;
@@ -881,7 +887,7 @@ END;
 	$i = 0;
 	$sql = <<<END
 	SELECT videos.id FROM videos
-	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account = '$myChannelId'
+	INNER JOIN channels ON channels.playlist_id = videos.playlist_id AND channels.account LIKE '$myChannelId'
 	WHERE views IS NULL
 	-- LIMIT 1000;
 END;
