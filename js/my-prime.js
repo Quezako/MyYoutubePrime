@@ -140,7 +140,7 @@ $(function() {
 		// $("#status").alert();
 		// $("#status").alert('show');
 		$("#status").show();
-		$("#status").html("<img src='img/download.gif' /> Loading...");
+		$("#status").html("<img src='img/download.gif' style='width:25px;' /> Loading...");
 
  		$(".odd, .even").each(function() {
 			strHref = $(this).find("td:nth-child(" + strCol + ")").find("a").attr("href");
@@ -178,7 +178,7 @@ $(function() {
     $("#_updateSubscriptions, #_updatePlaylists, #_updateAll, #_updatePlaylistsDetails, #_updateVideos, #_updateVideosDetails").click(function() {
 		// $("#status").alert();
 		$("#status").show();
-		$("#status").html("<img src='img/download.gif' /> Loading...");
+		$("#status").html("<img src='img/download.gif' style='width:25px;' /> Loading...");
 		console.log(this.id);
 		$.ajax({
 			type: "GET",
