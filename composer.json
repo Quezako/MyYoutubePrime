@@ -1,4 +1,7 @@
 {
+    "name": "quezako/my-youtube-prime",
+    "description": "Single-page app to manage YouTube subscriptions, playlists, and videos.",
+    "license": "proprietary",
     "require": {
         "google/apiclient": "^2.0"
     }

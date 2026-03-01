@@ -31,6 +31,11 @@ $service = new Google_Service_YouTube($client);
 // Check if an auth token exists for the required scopes
 $tokenSessionKey = 'token-' . $client->prepareScopes();
 
+$authCode = filter_input(INPUT_GET, 'code', FILTER_SANITIZE_STRING);
+$authState = filter_input(INPUT_GET, 'state', FILTER_SANITIZE_STRING);
+$action = filter_input(INPUT_GET, 'action', FILTER_SANITIZE_STRING);
+$action = $action ?? '';
+
 // $service = 'remove_me';
 $htmlBody = '';
 $htmlTable = '';
@@ -43,12 +48,12 @@ if (isset($_COOKIE['radio_music']) && $_COOKIE['radio_music'] == '{"checked":tru
 	// $myChannelId = 'UCXjJIMHXcMf4-zg8ppOgyyw'; // Quezako
 }
 
-if (isset($_GET['code'])) {
-    if (strval($_SESSION['state']) !== strval($_GET['state'])) {
+if ($authCode !== null) {
+	if (strval($_SESSION['state']) !== strval($authState)) {
         die('The session state did not match.');
     }
 
-    $client->authenticate($_GET['code']);
+	$client->authenticate($authCode);
     $_SESSION[$tokenSessionKey] = $client->getAccessToken();
     header('Location: ' . $redirect);
 }
@@ -69,7 +74,7 @@ try {
 
 // Check to ensure that the access token was successfully acquired.// Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
-	if (!isset($_GET['action']) || !in_array($_GET['action'],['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2', '_ajaxUpdate'])) {
+	if (empty($action) || !in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2', '_ajaxUpdate'], true)) {
 		try {
 			_getMyChannelId($service, $myChannelId);
 		} catch (Google_Service_Exception $e) {
@@ -94,8 +99,8 @@ if ($client->getAccessToken()) {
 		}
 	}
 
-	if (isset($_GET['action'])) {
-		switch ($_GET['action']) {
+	if (!empty($action)) {
+		switch ($action) {
 			case '_listSubscriptions':
 				_listSubscriptions($service, $pdo, $htmlTable, $myChannelId, $htmlSelect);
 				break;
@@ -326,13 +331,6 @@ END;
 			</div>
 		</nav>
 		<?=$htmlBody?>
-		<?php
-        if (isset($_GET['action'])) {
-            $action = $_GET['action'];
-        } else {
-            $action = '';
-        }
-        ?>
 		<div class="<?=$action?>">
 			<?php
             if (in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2'])) {

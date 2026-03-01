@@ -46,12 +46,22 @@ $myChannelId = 'UCDhEgLlKq6teYnMOUS3MZ_g';
 // Check if an auth token exists for the required scopes
 $tokenSessionKey = 'token-' . $client->prepareScopes();
 
-if (isset($_GET['code'])) {
-	if (strval($_SESSION['state']) !== strval($_GET['state'])) {
+$authCode = filter_input(INPUT_GET, 'code', FILTER_SANITIZE_STRING);
+$authState = filter_input(INPUT_GET, 'state', FILTER_SANITIZE_STRING);
+$action = filter_input(INPUT_GET, 'action', FILTER_SANITIZE_STRING);
+$action = $action ?? '';
+
+function _sanitizeId($value)
+{
+	return preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$value);
+}
+
+if ($authCode !== null) {
+	if (strval($_SESSION['state']) !== strval($authState)) {
 		die('The session state did not match.');
 	}
 
-	$client->authenticate($_GET['code']);
+	$client->authenticate($authCode);
 	$_SESSION[$tokenSessionKey] = $client->getAccessToken();
 	header('Location: ' . $redirect);
 }
@@ -74,8 +84,8 @@ try {
 
 // Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
-	if (isset($_GET['action'])) {
-		if (!in_array($_GET['action'], ['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2', '_ajaxUpdate'])) {
+	if (!empty($action)) {
+		if (!in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2', '_ajaxUpdate', '_updateSubscriptions', '_updateVideos', '_updateVideosDetails', '_updatePlaylists', '_updatePlaylistsDetails', '_updateMusicPlaylistsDetails', '_updateAll'], true)) {
 			try {
 				_getMyChannelId($service, $myChannelId);
 			} catch (Google_Service_Exception $e) {
@@ -100,7 +110,7 @@ if ($client->getAccessToken()) {
 			}
 		}
 
-		switch ($_GET['action']) {
+		switch ($action) {
 			case '_listSubscriptions':
 			case '_listPlaylists':
 			case '_listVideos':
@@ -192,10 +202,11 @@ function _covtime($youtube_time)
 
 function _list($pdo, $myChannelId)
 {
+	global $action;
 	$strFilter = '';
 	$arrSort = [];
 
-	if ($_GET['action'] == '_listSubscriptions') {
+	if ($action == '_listSubscriptions') {
 		$table = 'channels';
 		$arrHeaders = [
 			"Action",
@@ -227,7 +238,7 @@ FROM channels
 LEFT JOIN channel_types ON channels.type = channel_types.id
 WHERE channels.account LIKE '$myChannelId'
 END;
-	} elseif ($_GET['action'] == '_listPlaylists') {
+	} elseif ($action == '_listPlaylists') {
 		$table = 'playlists';
 		$arrHeaders = [
 			"Action",
@@ -253,7 +264,7 @@ WHERE account LIKE '$myChannelId'
 -- ORDER BY sort ASC
 -- LIMIT 200;
 END;
-	} elseif ($_GET['action'] == '_listVideos') {
+	} elseif ($action == '_listVideos') {
 		$table = 'videos';
 		$arrHeaders = [
 			"Action",
@@ -301,7 +312,7 @@ WHERE channels.status > 0
 -- ORDER BY channel_sort ASC, SUBSTR(videos.date_published, 0, 8) DESC, CAST(duration AS INT) ASC
 -- LIMIT 1000;
 END;
-	} elseif ($_GET['action'] == '_listVideos2') {
+	} elseif ($action == '_listVideos2') {
 		$table = 'videos';
 		$arrHeaders = [
 			"Action",
@@ -353,45 +364,97 @@ END;
 
 	$isType2 = false;
 
-	if (is_array($_GET['filter'])) {
-		foreach ($_GET['filter'] as $key => $filter) {
+	$filters = filter_input(INPUT_GET, 'filter', FILTER_DEFAULT, FILTER_REQUIRE_ARRAY) ?? [];
+	$columns = filter_input(INPUT_GET, 'column', FILTER_DEFAULT, FILTER_REQUIRE_ARRAY) ?? [];
+
+	$sizeParam = filter_input(INPUT_GET, 'size', FILTER_SANITIZE_STRING);
+	$pageParam = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT);
+	$page = ($pageParam === false || $pageParam === null || $pageParam < 0) ? 0 : (int)$pageParam;
+	$size = ($sizeParam === 'all') ? 'all' : (int)$sizeParam;
+	if ($size !== 'all') {
+		if ($size <= 0) {
+			$size = 50;
+		} elseif ($size > 200) {
+			$size = 200;
+		}
+	}
+
+	$whereParts = [];
+	$params = [];
+
+	if (is_array($filters)) {
+		foreach ($filters as $key => $filter) {
+			if (!isset($arrFields[$key])) {
+				continue;
+			}
+
+			$filter = trim((string)$filter);
+			if ($filter === '') {
+				continue;
+			}
+
 			if ($arrFields[$key] === "type2") {
 				$arrFields[$key] = "channel_types.label";
 				$isType2 = true;
 			}
 
+			$field = $arrFields[$key];
+
 			$strFilterType = substr($filter, 0, 1);
 
 			if ($strFilterType === '<' || $strFilterType === '>') {
-				$arrFilter = explode(" and ", $filter);
-				$arrFilter2 = explode(" or ", $filter);
+				$arrFilter = preg_split('/\s+and\s+/i', $filter);
+				$arrFilter2 = preg_split('/\s+or\s+/i', $filter);
 
 				if (isset($arrFilter2[1])) {
-					$strFilter .= " AND ({$arrFields[$key]} " . implode(" OR {$arrFields[$key]} ", $arrFilter2) . ") ";
+					$orClauses = [];
+					foreach ($arrFilter2 as $strFilterSplit) {
+						if (preg_match('/^(<=|>=|<|>)(.+)$/', trim($strFilterSplit), $matches)) {
+							$orClauses[] = "$field {$matches[1]} ?";
+							$params[] = trim($matches[2]);
+						}
+					}
+					if (!empty($orClauses)) {
+						$whereParts[] = '(' . implode(' OR ', $orClauses) . ')';
+					}
 				} else {
 					foreach ($arrFilter as $strFilterSplit) {
-						$strFilter .= " AND {$arrFields[$key]} $strFilterSplit";
+						if (preg_match('/^(<=|>=|<|>)(.+)$/', trim($strFilterSplit), $matches)) {
+							$whereParts[] = "$field {$matches[1]} ?";
+							$params[] = trim($matches[2]);
+						}
 					}
 				}
 			} elseif ($strFilterType === '!') {
 				$filter = trim($filter, '!()');
-				$arrFilter = explode("|", $filter);
+				$arrFilter = array_filter(array_map('trim', explode('|', $filter)));
 
 				foreach ($arrFilter as $strFilterSplit) {
-					$strFilter .= " AND {$arrFields[$key]} NOT LIKE '%$strFilterSplit%'";
+					$whereParts[] = "$field NOT LIKE ?";
+					$params[] = "%$strFilterSplit%";
 				}
 			} elseif ($strFilterType === "'") {
-				$strFilter .= " AND {$arrFields[$key]} ISNULL";
+				$whereParts[] = "$field IS NULL";
 			} else {
-				$arrFilter = explode("|", $filter);
-				$strFilter .= " AND ({$arrFields[$key]} LIKE '%" . implode("%' OR {$arrFields[$key]} LIKE '%", $arrFilter) . "%')";
+				$arrFilter = array_filter(array_map('trim', explode('|', $filter)));
+				if (!empty($arrFilter)) {
+					$likeClauses = [];
+					foreach ($arrFilter as $strFilterSplit) {
+						$likeClauses[] = "$field LIKE ?";
+						$params[] = "%$strFilterSplit%";
+					}
+					$whereParts[] = '(' . implode(' OR ', $likeClauses) . ')';
+				}
 			}
 		}
 	}
 
-	if (is_array($_GET['column'])) {
-		foreach ($_GET['column'] as $key => $order) {
-			$order = $order == 0 ? 'ASC' : 'DESC';
+	if (is_array($columns)) {
+		foreach ($columns as $key => $order) {
+			if (!isset($arrFields[$key])) {
+				continue;
+			}
+			$order = ((int)$order === 0) ? 'ASC' : 'DESC';
 
 			if ($arrFields[$key] === "channel_types.label" && $isType2 === true) {
 				$arrFields[$key] = "channel_types.sort";
@@ -407,20 +470,24 @@ END;
 		$strSort = 'ORDER BY ' . implode(',', $arrSort);
 	}
 
+	if (!empty($whereParts)) {
+		$strFilter = ' AND ' . implode(' AND ', $whereParts);
+	}
+
 	$sqlCount .= <<<END
 
 $strFilter
 END;
 	$stmt = $pdo->prepare($sqlCount);
-	$stmt->execute();
+	$stmt->execute($params);
 	$resCount = $stmt->fetch();
 
-	if ($_GET['size'] == 'all') {
+	if ($size === 'all') {
 		$offset = 0;
 		$rowCount = $resCount['count'];
 	} else {
-		$offset = $_GET['size'] * $_GET['page'];
-		$rowCount = $_GET['size'];
+		$offset = $size * $page;
+		$rowCount = $size;
 	}
 	$sql .= <<<END
 
@@ -429,7 +496,7 @@ $strSort
 LIMIT {$offset}, {$rowCount};
 END;
 	$stmt = $pdo->prepare($sql);
-	$stmt->execute();
+	$stmt->execute($params);
 	$resChannels = $stmt->fetchAll();
 
 	$arrTable = [];
@@ -974,14 +1041,22 @@ function _updateAll($service, $pdo, &$htmlBody, $myChannelId)
 
 function _ajaxUpdate($service, $pdo, &$htmlBody)
 {
-	if (!isset($_POST['data'])) {
+	$data = filter_input(INPUT_POST, 'data', FILTER_DEFAULT, FILTER_REQUIRE_ARRAY);
+	if (!is_array($data)) {
 		echo 'No POST data.';
 	} else {
-		$strAction = $_POST['data'][0];
-		$strBtn = $_POST['data'][1];
-		$strPlaylist = (isset($_POST['data'][4]) && $_POST['data'][4] !== '') ? $_POST['data'][4] : null;
-		$strType = isset($_POST['data'][5]) ? $_POST['data'][5] : null;
+		$strAction = isset($data[0]) ? (string)$data[0] : '';
+		$strBtn = isset($data[1]) ? (string)$data[1] : '';
+		$strPlaylist = (isset($data[4]) && $data[4] !== '') ? _sanitizeId($data[4]) : null;
+		$strType = isset($data[5]) ? (int)$data[5] : null;
 		$strStatus = $strBtn == 'btnIgnore' ? -2 : 1;
+
+		$allowedActions = ['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2'];
+		$allowedButtons = ['btnSort', 'btnPlaylist', 'btnType', 'btnIgnore', 'btnUnignore'];
+		if (!in_array($strAction, $allowedActions, true) || !in_array($strBtn, $allowedButtons, true)) {
+			echo 'Invalid action.';
+			return;
+		}
 
 		if ($strAction == '_listSubscriptions') {
 			$strTable = 'channels';
@@ -996,26 +1071,38 @@ function _ajaxUpdate($service, $pdo, &$htmlBody)
 		$arrVideoId = [];
 		$i = 0;
 
-		foreach ($_POST['data'][2] as $key => $isChecked) {
+		$checkedList = isset($data[2]) && is_array($data[2]) ? $data[2] : [];
+		$idList = isset($data[3]) && is_array($data[3]) ? $data[3] : [];
+		foreach ($checkedList as $key => $isChecked) {
 			$sql = '';
+			$idValue = isset($idList[$key]) ? _sanitizeId($idList[$key]) : '';
+			if ($idValue === '') {
+				continue;
+			}
 
 			if ($strBtn == 'btnSort') {
 				$strSort = $key + 1;
-				$sql = "UPDATE $strTable SET sort=\"{$strSort}\" WHERE id = \"{$_POST['data'][3][$key]}\";";
+				$sql = "UPDATE $strTable SET sort = :sort WHERE id = :id";
+				$stmt = $pdo->prepare($sql);
+				$stmt->execute([':sort' => $strSort, ':id' => $idValue]);
+				$i++;
+				continue;
 			} elseif ($isChecked == 1) {
 				if ($strBtn == 'btnPlaylist') {
-					$arrVideoId[] = $_POST['data'][3][$key];
+					$arrVideoId[] = $idValue;
 				} elseif ($strBtn == 'btnType') {
-					$sql = "UPDATE $strTable SET type=\"{$strType}\" WHERE id = \"{$_POST['data'][3][$key]}\";";
+					$sql = "UPDATE $strTable SET type = :type WHERE id = :id";
+					$stmt = $pdo->prepare($sql);
+					$stmt->execute([':type' => $strType, ':id' => $idValue]);
+					$i++;
+					continue;
 				} else {
-					$sql = "UPDATE $strTable SET status=\"$strStatus\" WHERE id = \"{$_POST['data'][3][$key]}\";";
+					$sql = "UPDATE $strTable SET status = :status WHERE id = :id";
+					$stmt = $pdo->prepare($sql);
+					$stmt->execute([':status' => $strStatus, ':id' => $idValue]);
+					$i++;
+					continue;
 				}
-			}
-
-			if ($sql !== '') {
-				$i++;
-				$stmt = $pdo->prepare($sql);
-				$stmt->execute();
 			}
 		}
 
