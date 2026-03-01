@@ -97,6 +97,7 @@ $(function() {
 	$("table").tablesorter({
 		theme: "bootstrap",
 		widthFixed: true,
+		headerTemplate: "{content} {icon}",
 		sortLocaleCompare: true, // needed for accented characters in the data
 		sortList: [ [0,1] ],
 		headers: {

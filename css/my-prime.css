@@ -48,3 +48,32 @@ body {
 	max-height: 400px;
 	overflow: auto;
 }
+.tablesorter-bootstrap .tablesorter-header i.tablesorter-icon {
+	position: absolute;
+	right: 6px;
+	top: 50%;
+	transform: translateY(-50%);
+	margin: 0;
+}
+.tablesorter-bootstrap .tablesorter-headerAsc i.tablesorter-icon,
+.tablesorter-bootstrap .tablesorter-headerDesc i.tablesorter-icon {
+	background-image: none;
+}
+.tablesorter-bootstrap .tablesorter-headerAsc i.tablesorter-icon::before {
+	content: "";
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='%23e9ecef'><path d='M8 4l4 6H4z'/></svg>");
+	background-size: 12px 12px;
+	background-repeat: no-repeat;
+}
+.tablesorter-bootstrap .tablesorter-headerDesc i.tablesorter-icon::before {
+	content: "";
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='%23e9ecef'><path d='M8 12L4 6h8z'/></svg>");
+	background-size: 12px 12px;
+	background-repeat: no-repeat;
+}
