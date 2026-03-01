@@ -51,6 +51,43 @@ $authState = filter_input(INPUT_GET, 'state', FILTER_SANITIZE_STRING);
 $action = filter_input(INPUT_GET, 'action', FILTER_SANITIZE_STRING);
 $action = $action ?? '';
 
+function _mergeToken($token, $storedToken)
+{
+	if (!is_array($token)) {
+		return $token;
+	}
+
+	if (!isset($token['refresh_token']) && is_array($storedToken) && isset($storedToken['refresh_token'])) {
+		$token['refresh_token'] = $storedToken['refresh_token'];
+	}
+
+	return $token;
+}
+
+function _loadStoredToken($pdo, $tokenKey)
+{
+	$stmt = $pdo->prepare('SELECT token_json FROM oauth_tokens WHERE token_key = :key');
+	$stmt->execute([':key' => $tokenKey]);
+	$row = $stmt->fetch();
+	if (!$row || empty($row['token_json'])) {
+		return null;
+	}
+
+	$token = json_decode($row['token_json'], true);
+	return is_array($token) ? $token : null;
+}
+
+function _saveStoredToken($pdo, $tokenKey, array $token)
+{
+	$tokenJson = json_encode($token, JSON_UNESCAPED_SLASHES);
+	$stmt = $pdo->prepare('INSERT OR REPLACE INTO oauth_tokens (token_key, token_json, updated_at) VALUES (:key, :json, :ts)');
+	$stmt->execute([
+		':key' => $tokenKey,
+		':json' => $tokenJson,
+		':ts' => time()
+	]);
+}
+
 function _sanitizeId($value)
 {
 	return preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$value);
@@ -70,20 +107,6 @@ function _withTransaction($pdo, callable $callback)
 	}
 }
 
-if ($authCode !== null) {
-	if (strval($_SESSION['state']) !== strval($authState)) {
-		die('The session state did not match.');
-	}
-
-	$client->authenticate($authCode);
-	$_SESSION[$tokenSessionKey] = $client->getAccessToken();
-	header('Location: ' . $redirect);
-}
-
-if (isset($_SESSION[$tokenSessionKey])) {
-	$client->setAccessToken($_SESSION[$tokenSessionKey]);
-}
-
 // SQLite.
 try {
 	$pdo = new PDO('sqlite:' . dirname(__FILE__) . '/my-prime.db');
@@ -97,6 +120,12 @@ try {
 }
 
 try {
+	$pdo->exec('CREATE TABLE IF NOT EXISTS oauth_tokens (token_key TEXT PRIMARY KEY, token_json TEXT NOT NULL, updated_at INTEGER NOT NULL)');
+} catch (Exception $e) {
+	echo "Can't create token table: " . $e->getMessage();
+}
+
+try {
 	$pdo->exec('CREATE INDEX IF NOT EXISTS idx_channels_account ON channels(account)');
 	$pdo->exec('CREATE INDEX IF NOT EXISTS idx_channels_playlist_id ON channels(playlist_id)');
 	$pdo->exec('CREATE INDEX IF NOT EXISTS idx_videos_playlist_id ON videos(playlist_id)');
@@ -106,6 +135,53 @@ try {
 } catch (Exception $e) {
 	echo "Can't create indexes: " . $e->getMessage();
 }
+
+$storedToken = _loadStoredToken($pdo, $tokenSessionKey);
+if (!is_array($storedToken) || empty($storedToken['refresh_token'])) {
+	$client->setPrompt('consent');
+}
+
+if ($authCode !== null) {
+	if (strval($_SESSION['state']) !== strval($authState)) {
+		die('The session state did not match.');
+	}
+
+	$client->authenticate($authCode);
+	$token = _mergeToken($client->getAccessToken(), $storedToken);
+	$_SESSION[$tokenSessionKey] = $token;
+	_saveStoredToken($pdo, $tokenSessionKey, $token);
+	session_write_close();
+	header('Location: ' . $redirect);
+	exit;
+}
+
+if (isset($_SESSION[$tokenSessionKey])) {
+	$client->setAccessToken($_SESSION[$tokenSessionKey]);
+	$storedToken = _mergeToken($_SESSION[$tokenSessionKey], $storedToken);
+} elseif (!empty($storedToken)) {
+	$client->setAccessToken($storedToken);
+	$_SESSION[$tokenSessionKey] = $storedToken;
+}
+
+if ($client->getAccessToken() && $client->isAccessTokenExpired()) {
+	$refreshToken = $client->getRefreshToken();
+	if (empty($refreshToken) && is_array($storedToken) && !empty($storedToken['refresh_token'])) {
+		$refreshToken = $storedToken['refresh_token'];
+	}
+
+	if (!empty($refreshToken)) {
+		$newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+		if (is_array($newToken) && empty($newToken['error'])) {
+			if (empty($newToken['refresh_token'])) {
+				$newToken['refresh_token'] = $refreshToken;
+			}
+			$_SESSION[$tokenSessionKey] = $newToken;
+			_saveStoredToken($pdo, $tokenSessionKey, $newToken);
+		}
+	}
+}
+
+session_write_close();
 
 // Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
@@ -169,7 +245,6 @@ if ($client->getAccessToken()) {
 		}
 	}
 
-	$_SESSION[$tokenSessionKey] = $client->getAccessToken();
 } elseif ($OAUTH2_CLIENT_ID == 'REPLACE_ME') {
 	echo <<<END
 	<h3>Client Credentials Required</h3>
@@ -184,6 +259,10 @@ END;
 
 function _showAuth($client, &$htmlBody)
 {
+	if (session_status() !== PHP_SESSION_ACTIVE) {
+		session_start();
+	}
+
 	// If the user hasn't authorized the app, initiate the OAuth flow
 	$state = mt_rand();
 	$client->setState($state);
@@ -196,6 +275,7 @@ function _showAuth($client, &$htmlBody)
 END;
 
 	// header('Location: ' . $authUrl);
+	session_write_close();
 }
 
 function _getMyChannelId($service, &$myChannelId)

@@ -41,6 +41,9 @@ pre {
 body {
 	padding: 5px !important;
 }
+a {
+	text-decoration: none;
+}
 .tablesorter-pager .btn-group-sm .btn {
 	font-size: 1.2em; /* make pager arrows more visible */
 }

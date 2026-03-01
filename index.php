@@ -26,15 +26,74 @@ $client->setScopes('https://www.googleapis.com/auth/youtube');
 $redirect = filter_var((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[PHP_SELF]", FILTER_SANITIZE_URL);
 $client->setRedirectUri($redirect);
 
+
 $service = new Google_Service_YouTube($client);
+
+// SQLite.
+try {
+	$pdo = new PDO('sqlite:' . dirname(__FILE__) . '/my-prime.db');
+	$pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+	$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
+} catch (Exception $e) {
+	echo "Can't access SQLite DB: " . $e->getMessage();
+	die();
+}
+
+try {
+	$pdo->exec('CREATE TABLE IF NOT EXISTS oauth_tokens (token_key TEXT PRIMARY KEY, token_json TEXT NOT NULL, updated_at INTEGER NOT NULL)');
+} catch (Exception $e) {
+	echo "Can't create token table: " . $e->getMessage();
+}
+
 
 // Check if an auth token exists for the required scopes
 $tokenSessionKey = 'token-' . $client->prepareScopes();
+$storedToken = _loadStoredToken($pdo, $tokenSessionKey);
+if (!is_array($storedToken) || empty($storedToken['refresh_token'])) {
+	$client->setPrompt('consent');
+}
 
 $authCode = filter_input(INPUT_GET, 'code', FILTER_SANITIZE_STRING);
 $authState = filter_input(INPUT_GET, 'state', FILTER_SANITIZE_STRING);
 $action = filter_input(INPUT_GET, 'action', FILTER_SANITIZE_STRING);
 $action = $action ?? '';
+
+function _mergeToken($token, $storedToken)
+{
+	if (!is_array($token)) {
+		return $token;
+	}
+
+	if (!isset($token['refresh_token']) && is_array($storedToken) && isset($storedToken['refresh_token'])) {
+		$token['refresh_token'] = $storedToken['refresh_token'];
+	}
+
+	return $token;
+}
+
+function _loadStoredToken($pdo, $tokenKey)
+{
+	$stmt = $pdo->prepare('SELECT token_json FROM oauth_tokens WHERE token_key = :key');
+	$stmt->execute([':key' => $tokenKey]);
+	$row = $stmt->fetch();
+	if (!$row || empty($row['token_json'])) {
+		return null;
+	}
+
+	$token = json_decode($row['token_json'], true);
+	return is_array($token) ? $token : null;
+}
+
+function _saveStoredToken($pdo, $tokenKey, array $token)
+{
+	$tokenJson = json_encode($token, JSON_UNESCAPED_SLASHES);
+	$stmt = $pdo->prepare('INSERT OR REPLACE INTO oauth_tokens (token_key, token_json, updated_at) VALUES (:key, :json, :ts)');
+	$stmt->execute([
+		':key' => $tokenKey,
+		':json' => $tokenJson,
+		':ts' => time()
+	]);
+}
 
 // $service = 'remove_me';
 $htmlBody = '';
@@ -49,32 +108,52 @@ if (isset($_COOKIE['radio_music']) && $_COOKIE['radio_music'] == '{"checked":tru
 }
 
 if ($authCode !== null) {
-	if (strval($_SESSION['state']) !== strval($authState)) {
-        die('The session state did not match.');
-    }
+	if (empty($authState) || !isset($_SESSION['state']) || strval($_SESSION['state']) !== strval($authState)) {
+		unset($_SESSION['state']);
+		_showAuth($client, $htmlBody);
+		exit;
+	}
 
 	$client->authenticate($authCode);
-    $_SESSION[$tokenSessionKey] = $client->getAccessToken();
-    header('Location: ' . $redirect);
+	$token = _mergeToken($client->getAccessToken(), $storedToken);
+	$_SESSION[$tokenSessionKey] = $token;
+	_saveStoredToken($pdo, $tokenSessionKey, $token);
+	session_write_close();
+	header('Location: ' . $redirect);
+	exit;
 }
 
 if (isset($_SESSION[$tokenSessionKey])) {
     $client->setAccessToken($_SESSION[$tokenSessionKey]);
+    $storedToken = _mergeToken($_SESSION[$tokenSessionKey], $storedToken);
+} elseif (!empty($storedToken)) {
+	$client->setAccessToken($storedToken);
+	$_SESSION[$tokenSessionKey] = $storedToken;
 }
 
-// SQLite.
-try {
-    $pdo = new PDO('sqlite:' . dirname(__FILE__) . '/my-prime.db');
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
-} catch (Exception $e) {
-    echo "Can't access SQLite DB: " . $e->getMessage();
-    die();
+if ($client->getAccessToken() && $client->isAccessTokenExpired()) {
+	$refreshToken = $client->getRefreshToken();
+	if (empty($refreshToken) && is_array($storedToken) && !empty($storedToken['refresh_token'])) {
+		$refreshToken = $storedToken['refresh_token'];
+	}
+
+	if (!empty($refreshToken)) {
+		$newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+		if (is_array($newToken) && empty($newToken['error'])) {
+			if (empty($newToken['refresh_token'])) {
+				$newToken['refresh_token'] = $refreshToken;
+			}
+			$_SESSION[$tokenSessionKey] = $newToken;
+			_saveStoredToken($pdo, $tokenSessionKey, $newToken);
+		}
+	}
 }
+
+session_write_close();
 
 // Check to ensure that the access token was successfully acquired.// Check to ensure that the access token was successfully acquired.
 if ($client->getAccessToken()) {
-	if (empty($action) || !in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2', '_ajaxUpdate'], true)) {
+	if (!empty($action) && !in_array($action, ['_listSubscriptions', '_listPlaylists', '_listVideos', '_listVideos2', '_ajaxUpdate'], true)) {
 		try {
 			_getMyChannelId($service, $myChannelId);
 		} catch (Google_Service_Exception $e) {
@@ -114,7 +193,6 @@ if ($client->getAccessToken()) {
 		}
 	}
 
-    $_SESSION[$tokenSessionKey] = $client->getAccessToken();
 } elseif ($OAUTH2_CLIENT_ID == 'REPLACE_ME') {
     echo <<<END
 	<h3>Client Credentials Required</h3>
@@ -129,6 +207,10 @@ END;
 
 function _showAuth($client, &$htmlBody)
 {
+	if (session_status() !== PHP_SESSION_ACTIVE) {
+		session_start();
+	}
+
     // If the user hasn't authorized the app, initiate the OAuth flow
     $state = mt_rand();
     $client->setState($state);
@@ -141,6 +223,7 @@ function _showAuth($client, &$htmlBody)
 END;
 
     header('Location: ' . $authUrl);
+    session_write_close();
 }
 
 function _getMyChannelId($service, &$myChannelId)
@@ -275,10 +358,10 @@ END;
 		<script src="js/jquery.tablesorter.widgets.min.js"></script>
 
 		<!-- Bootstrap -->
-		<link rel="stylesheet" href="css/bootstrap.custom.css">
+		<!-- <link rel="stylesheet" href="css/bootstrap.custom.css"> -->
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" crossorigin="anonymous">
 		<link rel="stylesheet" href="css/theme.bootstrap.min.css">
 		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-
 
 		<!-- Tablesorter: optional -->
 		<link rel="stylesheet" href="css/jquery.tablesorter.pager.min.css">

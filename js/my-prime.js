@@ -221,7 +221,6 @@ $(function() {
 	$("input[type=radio]").change(function() {
 		$("input[type=radio]").each(function(){
 			Cookies.set("radio_" + $(this).attr("id"), JSON.stringify({checked: this.checked}), { expires : 777 });
-			console.log("1: " + $(this).attr("id") + "" + Cookies.get("radio_" + $(this).attr("id")));
 		});
 		location.reload(true);
 	});
@@ -229,10 +228,14 @@ $(function() {
 	// Save radio input state to local storage.
 	$(function(){
 		$("input[type=radio]").each(function(){
-			var state = JSON.parse(Cookies.get("radio_" + $(this).attr("id")));
-			console.log("2: " + $(this).attr("id") + "" + Cookies.get("radio_" + $(this).attr("id")));
-			
-			if (state) this.checked = state.checked;
+			var cookieValue = Cookies.get("radio_" + $(this).attr("id"));
+			if (!cookieValue) return;
+			try {
+				var state = JSON.parse(cookieValue);
+				if (state) this.checked = state.checked;
+			} catch (e) {
+				return;
+			}
 		});
 	});
 	
