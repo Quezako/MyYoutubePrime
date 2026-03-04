@@ -88,6 +88,46 @@ function _saveStoredToken($pdo, $tokenKey, array $token)
 	]);
 }
 
+function _ensureAccessToken($client, $pdo, $tokenSessionKey)
+{
+	if (!$client->getAccessToken()) {
+		return false;
+	}
+
+	if (!$client->isAccessTokenExpired()) {
+		return true;
+	}
+
+	$refreshToken = $client->getRefreshToken();
+	if (empty($refreshToken)) {
+		$storedToken = _loadStoredToken($pdo, $tokenSessionKey);
+		if (is_array($storedToken) && !empty($storedToken['refresh_token'])) {
+			$refreshToken = $storedToken['refresh_token'];
+		}
+	}
+
+	if (empty($refreshToken)) {
+		return false;
+	}
+
+	$newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+	if (is_array($newToken) && empty($newToken['error'])) {
+		if (empty($newToken['refresh_token'])) {
+			$newToken['refresh_token'] = $refreshToken;
+		}
+		if (session_status() !== PHP_SESSION_ACTIVE) {
+			session_start();
+		}
+		$_SESSION[$tokenSessionKey] = $newToken;
+		_saveStoredToken($pdo, $tokenSessionKey, $newToken);
+		session_write_close();
+		$client->setAccessToken($newToken);
+		return true;
+	}
+
+	return false;
+}
+
 function _sanitizeId($value)
 {
 	return preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$value);
@@ -969,6 +1009,12 @@ END;
 
 function _updateVideosDetails($service, $pdo, &$htmlBody, $myChannelId)
 {
+	global $client, $tokenSessionKey;
+	if (!_ensureAccessToken($client, $pdo, $tokenSessionKey)) {
+		_showAuth($client, $htmlBody);
+		return;
+	}
+
 	// Check if user has rated the videos.
 	$arrVideos = [];
 	$arrVideoIds = [];
@@ -997,7 +1043,26 @@ END;
 			break;
 		}
 		$strVideos = implode(',', $chunk);
-		$rspRatings = $service->videos->getRating($strVideos);
+		if (!_ensureAccessToken($client, $pdo, $tokenSessionKey)) {
+			_showAuth($client, $htmlBody);
+			return;
+		}
+		try {
+			$rspRatings = $service->videos->getRating($strVideos);
+		} catch (Google_Service_Exception $e) {
+			if (in_array($e->getCode(), [401], true)) {
+				_showAuth($client, $htmlBody);
+				return;
+			}
+			echo sprintf('<p>A Google_Service_Exception error occurred: <code>%s</code></p>', ($e->getMessage()));
+			return;
+		} catch (Google_Exception $e) {
+			echo sprintf('<p>An Google_Exception error occurred: <code>%s</code></p>', ($e->getMessage()));
+			return;
+		} catch (Exception $e) {
+			echo sprintf('<p>An Exception error occurred: <code>%s</code></p>', ($e->getMessage()));
+			return;
+		}
 
 		foreach ($rspRatings->items as $rating) {
 			if ($rating->rating == 'none') {
@@ -1042,8 +1107,26 @@ END;
 			'id' => $strVideos,
 			'fields' => 'items.id,items.contentDetails.duration,items.statistics.viewCount'
 		];
-
-		$rspVideos = $service->videos->listVideos('contentDetails,statistics', $queryParams);
+		if (!_ensureAccessToken($client, $pdo, $tokenSessionKey)) {
+			_showAuth($client, $htmlBody);
+			return;
+		}
+		try {
+			$rspVideos = $service->videos->listVideos('contentDetails,statistics', $queryParams);
+		} catch (Google_Service_Exception $e) {
+			if (in_array($e->getCode(), [401], true)) {
+				_showAuth($client, $htmlBody);
+				return;
+			}
+			echo sprintf('<p>A Google_Service_Exception error occurred: <code>%s</code></p>', ($e->getMessage()));
+			return;
+		} catch (Google_Exception $e) {
+			echo sprintf('<p>An Google_Exception error occurred: <code>%s</code></p>', ($e->getMessage()));
+			return;
+		} catch (Exception $e) {
+			echo sprintf('<p>An Exception error occurred: <code>%s</code></p>', ($e->getMessage()));
+			return;
+		}
 
 		foreach ($rspVideos->items as $video) {
 			$arrVideos2[$video->id]['duration'] = _covtime($video->contentDetails->duration);
@@ -1079,8 +1162,26 @@ END;
 			'id' => $strVideos,
 			'fields' => 'items.id,items.statistics.viewCount'
 		];
-
-		$rspVideos = $service->videos->listVideos('contentDetails,statistics', $queryParams);
+		if (!_ensureAccessToken($client, $pdo, $tokenSessionKey)) {
+			_showAuth($client, $htmlBody);
+			return;
+		}
+		try {
+			$rspVideos = $service->videos->listVideos('contentDetails,statistics', $queryParams);
+		} catch (Google_Service_Exception $e) {
+			if (in_array($e->getCode(), [401], true)) {
+				_showAuth($client, $htmlBody);
+				return;
+			}
+			echo sprintf('<p>A Google_Service_Exception error occurred: <code>%s</code></p>', ($e->getMessage()));
+			return;
+		} catch (Google_Exception $e) {
+			echo sprintf('<p>An Google_Exception error occurred: <code>%s</code></p>', ($e->getMessage()));
+			return;
+		} catch (Exception $e) {
+			echo sprintf('<p>An Exception error occurred: <code>%s</code></p>', ($e->getMessage()));
+			return;
+		}
 
 		foreach ($rspVideos->items as $video) {
 			$arrVideos3[$video->id]['views'] = $video->statistics->viewCount;
@@ -1132,6 +1233,12 @@ END;
 
 function _updateAll($service, $pdo, &$htmlBody, $myChannelId)
 {
+	global $client, $tokenSessionKey;
+	if (!_ensureAccessToken($client, $pdo, $tokenSessionKey)) {
+		_showAuth($client, $htmlBody);
+		return;
+	}
+
 	_updatePlaylistsDetails($service, $pdo, $htmlBody, $myChannelId);
 	_updateVideos($service, $pdo, $htmlBody, $myChannelId);
 	_updateVideosDetails($service, $pdo, $htmlBody, $myChannelId);
